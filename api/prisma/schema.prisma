@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Enums ----------
+
+enum Rol {
+  ADMIN
+  GERENTE
+  VENDEDOR
+}
+
+enum ProveedorAuth {
+  EMAIL
+  GOOGLE
+}
+
+enum TipoDolar {
+  OFICIAL
+  BLUE
+  MEP
+  CCL
+  TARJETA
+  MAYORISTA
+}
+
+// ---------- Organización ----------
+
+model Negocio {
+  id                     String    @id @default(uuid()) @db.Uuid
+  nombre                 String
+  cuit                   String?
+  tipoDolar              TipoDolar @default(BLUE) @map("tipo_dolar")
+  plan                   String?
+  respuestasCuestionario Json?     @map("respuestas_cuestionario")
+  reglaRedondeo          Int       @default(100) @map("regla_redondeo")
+  creadoEn               DateTime  @default(now()) @map("creado_en")
+  actualizadoEn          DateTime  @updatedAt @map("actualizado_en")
+
+  tiendas    Tienda[]
+  membresias Membresia[]
+
+  @@map("negocios")
+}
+
+model Usuario {
+  id            String        @id @default(uuid()) @db.Uuid
+  email         String        @unique
+  nombre        String?
+  proveedorAuth ProveedorAuth @map("proveedor_auth")
+  passwordHash  String?       @map("password_hash")
+  googleId      String?       @unique @map("google_id")
+  verificado    Boolean       @default(false)
+  creadoEn      DateTime      @default(now()) @map("creado_en")
+  actualizadoEn DateTime      @updatedAt @map("actualizado_en")
+
+  membresias Membresia[]
+
+  @@map("usuarios")
+}
+
+model Membresia {
+  id            String   @id @default(uuid()) @db.Uuid
+  usuarioId     String   @map("usuario_id") @db.Uuid
+  negocioId     String   @map("negocio_id") @db.Uuid
+  rol           Rol
+  topeDescuento Decimal  @default(0) @map("tope_descuento") @db.Decimal(5, 2)
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  usuario Usuario         @relation(fields: [usuarioId], references: [id])
+  negocio Negocio         @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  tiendas UsuarioTienda[]
+
+  @@unique([usuarioId, negocioId])
+  @@index([negocioId])
+  @@map("membresias")
+}
+
+model Tienda {
+  id            String   @id @default(uuid()) @db.Uuid
+  negocioId     String   @map("negocio_id") @db.Uuid
+  nombre        String
+  direccion     String?
+  localidad     String?
+  provincia     String?
+  activa        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  negocio  Negocio         @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  usuarios UsuarioTienda[]
+
+  @@unique([negocioId, nombre])
+  @@index([negocioId])
+  @@map("tiendas")
+}
+
+model UsuarioTienda {
+  membresiaId String @map("membresia_id") @db.Uuid
+  tiendaId    String @map("tienda_id") @db.Uuid
+
+  membresia Membresia @relation(fields: [membresiaId], references: [id], onDelete: Cascade)
+  tienda    Tienda    @relation(fields: [tiendaId], references: [id], onDelete: Cascade)
+
+  @@id([membresiaId, tiendaId])
+  @@map("usuarios_tiendas")
+}
