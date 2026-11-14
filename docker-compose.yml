@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:17
+    container_name: quilatear-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quilatear
+      POSTGRES_PASSWORD: quilatear
+      POSTGRES_DB: quilatear
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    container_name: quilatear-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
