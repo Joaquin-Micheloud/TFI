@@ -8,9 +8,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { TiendasModule } from './tiendas/tiendas.module.js';
 import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { RolesGuard } from './auth/roles.guard.js';
+import { UsuariosModule } from './usuarios/usuarios.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, TiendasModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, TiendasModule, UsuariosModule],
   controllers: [AppController],
   providers: [
     AppService,

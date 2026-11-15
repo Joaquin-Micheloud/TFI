@@ -11,7 +11,8 @@ export interface JwtPayload {
 // Lo que queda disponible en cada request autenticado
 export interface UsuarioActual {
   usuarioId: string;
+  membresiaId: string;
   email: string;
   negocioId: string;
-  rol: Rol;
+  rol: Rol; // siempre el rol actual de la base, no el del token
 }
