@@ -13,8 +13,9 @@ export class TiendasService {
   // Un VENDEDOR además solo ve las tiendas que tiene asignadas.
   private filtroVisibilidad(user: UsuarioActual): Prisma.TiendaWhereInput {
     const filtro: Prisma.TiendaWhereInput = { negocioId: user.negocioId };
-    if (user.rol === Rol.VENDEDOR) {
-      filtro.usuarios = { some: { membresia: { usuarioId: user.usuarioId } } };
+        // Gerente y vendedor: solo las tiendas que tienen asignadas
+    if (user.rol !== Rol.ADMIN) {
+      filtro.usuarios = { some: { membresiaId: user.membresiaId } };
     }
     return filtro;
   }

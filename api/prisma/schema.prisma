@@ -72,6 +72,31 @@ enum ElaboracionPor {
   GRAMO
 }
 
+enum EstadoPieza {
+  DISPONIBLE
+  RESERVADA
+  VENDIDA
+  EN_TRANSITO
+  BAJA
+}
+
+enum TipoMovimiento {
+  INGRESO_COMPRA
+  INGRESO_ELABORACION
+  VENTA
+  DEVOLUCION
+  TRANSFERENCIA_SALIDA
+  TRANSFERENCIA_ENTRADA
+  AJUSTE_INVENTARIO
+  BAJA
+}
+
+enum MotivoBaja {
+  ROTURA
+  PERDIDA
+  FUNDICION
+  OTRO
+}
 // ---------- Organización ----------
 
 model Negocio {
@@ -91,6 +116,9 @@ model Negocio {
   preciosManualesGramo PrecioManualGramo[]
   categorias Categoria[]
   productos  Producto[]
+  piezas           Pieza[]
+  lotes            Lote[]
+  movimientosStock MovimientoStock[]
 
   @@map("negocios")
 }
@@ -108,6 +136,7 @@ model Usuario {
 
   membresias Membresia[]
   preciosManualesCargados PrecioManualGramo[]
+  movimientosStock MovimientoStock[]
 
   @@map("usuarios")
 }
@@ -143,6 +172,9 @@ model Tienda {
 
   negocio  Negocio         @relation(fields: [negocioId], references: [id], onDelete: Cascade)
   usuarios UsuarioTienda[]
+  piezas           Pieza[]
+  lotes            Lote[]
+  movimientosStock MovimientoStock[]
 
   @@unique([negocioId, nombre])
   @@index([negocioId])
@@ -259,10 +291,93 @@ model Producto {
 
   negocio   Negocio    @relation(fields: [negocioId], references: [id], onDelete: Cascade)
   categoria Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  piezas      Pieza[]
+  lotes       Lote[]
+  movimientos MovimientoStock[]
 
   @@unique([negocioId, codigo])
   @@unique([negocioId, codigoBarras])
   @@index([negocioId, tipo])
   @@index([categoriaId])
   @@map("productos")
+}
+
+// ---------- Stock ----------
+
+model Pieza {
+  id           String      @id @default(uuid()) @db.Uuid
+  negocioId    String      @map("negocio_id") @db.Uuid
+  productoId   String      @map("producto_id") @db.Uuid
+  tiendaId     String      @map("tienda_id") @db.Uuid
+  codigo       String
+  pesoGramos   Decimal     @map("peso_gramos") @db.Decimal(10, 3)
+  precioCompra Decimal?    @map("precio_compra") @db.Decimal(14, 2) // ARS, solo reventa
+  hechuraUsd   Decimal?    @map("hechura_usd") @db.Decimal(12, 2) // solo reventa
+  dolarAlta    Decimal     @map("dolar_alta") @db.Decimal(14, 4)
+  gramoAlta    Decimal?    @map("gramo_alta") @db.Decimal(14, 2)
+  estado       EstadoPieza @default(DISPONIBLE)
+  creadoEn     DateTime    @default(now()) @map("creado_en")
+  actualizadoEn DateTime   @updatedAt @map("actualizado_en")
+
+  negocio     Negocio           @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  producto    Producto          @relation(fields: [productoId], references: [id])
+  tienda      Tienda            @relation(fields: [tiendaId], references: [id])
+  movimientos MovimientoStock[]
+
+  @@unique([negocioId, codigo])
+  @@index([productoId, estado])
+  @@index([tiendaId, estado])
+  @@map("piezas")
+}
+
+model Lote {
+  id                 String   @id @default(uuid()) @db.Uuid
+  negocioId          String   @map("negocio_id") @db.Uuid
+  productoId         String   @map("producto_id") @db.Uuid
+  tiendaId           String   @map("tienda_id") @db.Uuid
+  cantidadInicial    Int      @map("cantidad_inicial")
+  cantidadDisponible Int      @map("cantidad_disponible")
+  pesoTotalGramos    Decimal? @map("peso_total_gramos") @db.Decimal(12, 3)
+  precioCompraTotal  Decimal? @map("precio_compra_total") @db.Decimal(14, 2)
+  monedaCompra       Moneda   @default(ARS) @map("moneda_compra")
+  hechuraUsdUnitaria Decimal? @map("hechura_usd_unitaria") @db.Decimal(12, 2)
+  dolarAlta          Decimal  @map("dolar_alta") @db.Decimal(14, 4)
+  gramoAlta          Decimal? @map("gramo_alta") @db.Decimal(14, 2)
+  fechaIngreso       DateTime @default(now()) @map("fecha_ingreso")
+
+  negocio     Negocio           @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  producto    Producto          @relation(fields: [productoId], references: [id])
+  tienda      Tienda            @relation(fields: [tiendaId], references: [id])
+  movimientos MovimientoStock[]
+
+  @@index([productoId, tiendaId, fechaIngreso])
+  @@map("lotes")
+}
+
+model MovimientoStock {
+  id         String         @id @default(uuid()) @db.Uuid
+  negocioId  String         @map("negocio_id") @db.Uuid
+  productoId String         @map("producto_id") @db.Uuid
+  tiendaId   String         @map("tienda_id") @db.Uuid
+  piezaId    String?        @map("pieza_id") @db.Uuid
+  loteId     String?        @map("lote_id") @db.Uuid
+  usuarioId  String         @map("usuario_id") @db.Uuid
+  tipo       TipoMovimiento
+  cantidad   Int // positivo = entra, negativo = sale
+  motivoBaja MotivoBaja?    @map("motivo_baja")
+  detalle    String?
+  referencia String? // id de la venta o transferencia que lo generó
+  fecha      DateTime       @default(now())
+
+  negocio  Negocio  @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  producto Producto @relation(fields: [productoId], references: [id])
+  tienda   Tienda   @relation(fields: [tiendaId], references: [id])
+  pieza    Pieza?   @relation(fields: [piezaId], references: [id])
+  lote     Lote?    @relation(fields: [loteId], references: [id])
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@index([negocioId, fecha])
+  @@index([productoId])
+  @@index([tiendaId])
+  @@map("movimientos_stock")
 }

@@ -24,7 +24,7 @@ import { UpdateProductoDto } from './dto/update-producto.dto.js';
 import { QueryProductosDto } from './dto/query-productos.dto.js';
 import { AjustePrecioCompraDto } from './dto/ajuste-precio-compra.dto.js';
 
-const incluir = {
+export const incluir = {
   categoria: { select: { id: true, nombre: true, margenDefectoPct: true } },
 } satisfies Prisma.ProductoInclude;
 
@@ -243,7 +243,7 @@ export class ProductosService {
    * Devuelve una función que calcula el precio de un producto.
    * Guarda en caché el precio del gramo por metal y ley, para no repetir consultas en un listado.
    */
-  private async crearCotizador(negocioId: string) {
+    async crearCotizador(negocioId: string) {
     const ctx = await this.precioGramo.contextoNegocio(negocioId);
     const gramos = new Map<string, Promise<Prisma.Decimal | null>>();
 
@@ -261,12 +261,16 @@ export class ProductosService {
       return gramos.get(clave)!;
     };
 
-    const cotizar = async (p: ProductoConCategoria): Promise<PrecioCalculado> => {
+    // "stock" trae el peso real y la hechura de una pieza o lote (Paso 8)
+    const cotizar = async (
+      p: ProductoConCategoria,
+      stock?: { pesoGramos: Prisma.Decimal | null; hechuraUsd: Prisma.Decimal | null },
+    ): Promise<PrecioCalculado> => {
       const margenPct = p.margenPct ?? p.categoria?.margenDefectoPct ?? null;
       const gramo = p.metal && p.ley ? await precioGramo(p.metal, p.ley) : null;
 
       const costo = calcularCosto(
-        { ...p, hechuraUsd: null },
+        { ...p, hechuraUsd: null, ...stock },
         { precioGramo: gramo, dolar: ctx.dolar.valorVenta },
       );
       if (!costo.ok) {

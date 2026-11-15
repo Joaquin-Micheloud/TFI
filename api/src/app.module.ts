@@ -15,6 +15,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { RolesGuard } from './auth/roles.guard.js';
 import { CategoriasModule } from './categorias/categorias.module.js';
 import { ProductosModule } from './productos/productos.module.js';
+import { StockModule } from './stock/stock.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,8 @@ import { ProductosModule } from './productos/productos.module.js';
     PreciosModule,
     CategoriasModule,
     ProductosModule,
+    ProductosModule,
+    StockModule,
   ],
   controllers: [AppController],
   providers: [
