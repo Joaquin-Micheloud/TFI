@@ -29,6 +29,28 @@ enum TipoDolar {
   MAYORISTA
 }
 
+enum TipoCotizacion {
+  DOLAR_OFICIAL
+  DOLAR_BLUE
+  DOLAR_MEP
+  DOLAR_CCL
+  DOLAR_TARJETA
+  DOLAR_MAYORISTA
+  ORO
+  PLATA
+}
+
+enum Metal {
+  ORO
+  PLATA
+}
+
+enum ModoPrecioMetal {
+  AUTOMATICO
+  AJUSTE
+  MANUAL
+}
+
 // ---------- Organización ----------
 
 model Negocio {
@@ -44,6 +66,8 @@ model Negocio {
 
   tiendas    Tienda[]
   membresias Membresia[]
+  configPreciosMetal   ConfigPrecioMetal[]
+  preciosManualesGramo PrecioManualGramo[]
 
   @@map("negocios")
 }
@@ -60,6 +84,7 @@ model Usuario {
   actualizadoEn DateTime      @updatedAt @map("actualizado_en")
 
   membresias Membresia[]
+  preciosManualesCargados PrecioManualGramo[]
 
   @@map("usuarios")
 }
@@ -110,4 +135,50 @@ model UsuarioTienda {
 
   @@id([membresiaId, tiendaId])
   @@map("usuarios_tiendas")
+}
+
+// ---------- Cotizaciones y precio del gramo ----------
+
+model Cotizacion {
+  id          String         @id @default(uuid()) @db.Uuid
+  tipo        TipoCotizacion
+  valorCompra Decimal?       @map("valor_compra") @db.Decimal(14, 4)
+  valorVenta  Decimal        @map("valor_venta") @db.Decimal(14, 4)
+  unidad      String // "ARS/USD" para dólares, "USD/oz" para metales
+  fuente      String
+  fechaHora   DateTime       @map("fecha_hora") // cuándo la actualizó la fuente
+  creadoEn    DateTime       @default(now()) @map("creado_en") // cuándo la leímos
+
+  @@index([tipo, creadoEn])
+  @@map("cotizaciones")
+}
+
+model ConfigPrecioMetal {
+  id            String          @id @default(uuid()) @db.Uuid
+  negocioId     String          @map("negocio_id") @db.Uuid
+  metal         Metal
+  modo          ModoPrecioMetal @default(AUTOMATICO)
+  ajustePct     Decimal         @default(0) @map("ajuste_pct") @db.Decimal(6, 2)
+  actualizadoEn DateTime        @updatedAt @map("actualizado_en")
+
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+
+  @@unique([negocioId, metal])
+  @@map("config_precio_metal")
+}
+
+model PrecioManualGramo {
+  id           String   @id @default(uuid()) @db.Uuid
+  negocioId    String   @map("negocio_id") @db.Uuid
+  metal        Metal
+  ley          Decimal  @db.Decimal(4, 3)
+  precioArs    Decimal  @map("precio_ars") @db.Decimal(14, 2)
+  vigenteDesde DateTime @default(now()) @map("vigente_desde")
+  usuarioId    String   @map("usuario_id") @db.Uuid
+
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([negocioId, metal, ley, vigenteDesde])
+  @@map("precios_manuales_gramo")
 }
