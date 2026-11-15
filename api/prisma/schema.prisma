@@ -51,6 +51,27 @@ enum ModoPrecioMetal {
   MANUAL
 }
 
+enum TipoProducto {
+  REVENTA
+  FANTASIA
+  ELABORACION
+}
+
+enum ModoStock {
+  UNICO
+  LOTE
+}
+
+enum Moneda {
+  ARS
+  USD
+}
+
+enum ElaboracionPor {
+  PIEZA
+  GRAMO
+}
+
 // ---------- Organización ----------
 
 model Negocio {
@@ -68,6 +89,8 @@ model Negocio {
   membresias Membresia[]
   configPreciosMetal   ConfigPrecioMetal[]
   preciosManualesGramo PrecioManualGramo[]
+  categorias Categoria[]
+  productos  Producto[]
 
   @@map("negocios")
 }
@@ -181,4 +204,65 @@ model PrecioManualGramo {
 
   @@index([negocioId, metal, ley, vigenteDesde])
   @@map("precios_manuales_gramo")
+}
+
+// ---------- Catálogo ----------
+
+model Categoria {
+  id               String   @id @default(uuid()) @db.Uuid
+  negocioId        String   @map("negocio_id") @db.Uuid
+  nombre           String
+  margenDefectoPct Decimal  @default(0) @map("margen_defecto_pct") @db.Decimal(6, 2)
+  creadoEn         DateTime @default(now()) @map("creado_en")
+  actualizadoEn    DateTime @updatedAt @map("actualizado_en")
+
+  negocio   Negocio    @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  productos Producto[]
+
+  @@unique([negocioId, nombre])
+  @@map("categorias")
+}
+
+model Producto {
+  id           String       @id @default(uuid()) @db.Uuid
+  negocioId    String       @map("negocio_id") @db.Uuid
+  categoriaId  String?      @map("categoria_id") @db.Uuid
+  codigo       String
+  codigoBarras String?      @map("codigo_barras")
+  nombre       String
+  descripcion  String?
+  tipo         TipoProducto
+  modoStock    ModoStock    @map("modo_stock")
+
+  // Tipos REVENTA y ELABORACION
+  metal      Metal?
+  ley        Decimal? @db.Decimal(4, 3)
+  pesoGramos Decimal? @map("peso_gramos") @db.Decimal(10, 3) // peso de referencia
+
+  // Margen propio (null = usa el de la categoría)
+  margenPct Decimal? @map("margen_pct") @db.Decimal(6, 2)
+
+  // Tipo FANTASIA
+  precioCompra Decimal? @map("precio_compra") @db.Decimal(14, 2)
+  monedaCompra Moneda?  @map("moneda_compra")
+
+  // Tipo ELABORACION
+  elaboracionUsd Decimal?        @map("elaboracion_usd") @db.Decimal(12, 2)
+  elaboracionPor ElaboracionPor? @map("elaboracion_por")
+  insumosArs     Decimal?        @map("insumos_ars") @db.Decimal(14, 2)
+
+  stockMinimo   Int?     @map("stock_minimo")
+  fotoUrl       String?  @map("foto_url")
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  negocio   Negocio    @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  categoria Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  @@unique([negocioId, codigo])
+  @@unique([negocioId, codigoBarras])
+  @@index([negocioId, tipo])
+  @@index([categoriaId])
+  @@map("productos")
 }

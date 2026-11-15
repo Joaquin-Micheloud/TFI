@@ -131,8 +131,21 @@ export class PrecioGramoService {
       }
     }
     return filas;
+    
   }
 
+  async contextoNegocio(negocioId: string) {
+    const negocio = await this.prisma.negocio.findUniqueOrThrow({
+      where: { id: negocioId },
+      select: { tipoDolar: true, reglaRedondeo: true },
+    });
+    const dolar = await this.cotizaciones.ultima(tipoCotizacionDolar(negocio.tipoDolar));
+    if (!dolar) {
+      throw new ServiceUnavailableException('Todavía no hay cotización del dólar guardada.');
+    }
+    return { tipoDolar: negocio.tipoDolar, dolar, reglaRedondeo: negocio.reglaRedondeo };
+  }
+  
   async obtenerConfig(negocioId: string) {
     const configs = await this.prisma.configPrecioMetal.findMany({ where: { negocioId } });
     return Object.values(Metal).map((metal) => {

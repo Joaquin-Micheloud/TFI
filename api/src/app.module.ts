@@ -13,6 +13,8 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module.js';
 import { PreciosModule } from './precios/precios.module.js';
 import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { RolesGuard } from './auth/roles.guard.js';
+import { CategoriasModule } from './categorias/categorias.module.js';
+import { ProductosModule } from './productos/productos.module.js';
 
 @Module({
   imports: [
@@ -25,6 +27,9 @@ import { RolesGuard } from './auth/roles.guard.js';
     NegocioModule,
     CotizacionesModule,
     PreciosModule,
+    PreciosModule,
+    CategoriasModule,
+    ProductosModule,
   ],
   controllers: [AppController],
   providers: [
