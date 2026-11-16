@@ -103,7 +103,7 @@ export class AuthService {
     };
   }
 
-  private async armarRespuesta(
+  async armarRespuesta(
     usuario: { id: string; email: string; nombre: string | null },
     membresia: { rol: Rol; negocio: { id: string; nombre: string } },
   ) {

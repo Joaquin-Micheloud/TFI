@@ -18,6 +18,13 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+  
+  mail:
+    image: axllent/mailpit
+    container_name: quilatear-mail
+    ports:
+      - "8025:8025" 
+      - "1025:1025" 
 
 volumes:
   pgdata:

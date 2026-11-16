@@ -1,23 +1,21 @@
 import {
   BadRequestException,
-  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { Prisma, ProveedorAuth, Rol } from '../generated/prisma/client.js';
+import { Prisma, Rol } from '../generated/prisma/client.js';
+import { sinIndefinidos } from '../common/objetos.js';
 import type { UsuarioActual } from '../auth/types.js';
-import { CreateUsuarioDto } from './dto/create-usuario.dto.js';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto.js';
 
-// Qué datos traemos de cada membresía
 const incluir = {
   usuario: { select: { id: true, email: true, nombre: true } },
   tiendas: { include: { tienda: { select: { id: true, nombre: true } } } },
 } satisfies Prisma.MembresiaInclude;
 
-type MembresiaConDatos = Prisma.MembresiaGetPayload<{ include: typeof incluir }>;
+export type MembresiaConDatos = Prisma.MembresiaGetPayload<{ include: typeof incluir }>;
 
 @Injectable()
 export class UsuariosService {
@@ -25,7 +23,7 @@ export class UsuariosService {
 
   async findAll(user: UsuarioActual) {
     const membresias = await this.prisma.membresia.findMany({
-      where: { negocioId: user.negocioId },
+      where: await this.filtroVisibilidad(user),
       include: incluir,
       orderBy: { creadoEn: 'asc' },
     });
@@ -36,85 +34,76 @@ export class UsuariosService {
     return this.formatear(await this.buscarMembresia(id, user));
   }
 
-  async create(dto: CreateUsuarioDto, user: UsuarioActual) {
-    const email = dto.email.trim().toLowerCase();
-
-    const existe = await this.prisma.usuario.findUnique({ where: { email } });
-    if (existe) {
-      throw new ConflictException('Ese email ya tiene una cuenta en QuilateAr');
-    }
-
-    await this.validarTiendas(dto.tiendaIds, user);
-    const passwordHash = await hash(dto.password, 10);
-
-    const usuario = await this.prisma.usuario.create({
-      data: {
-        email,
-        nombre: dto.nombre.trim(),
-        proveedorAuth: ProveedorAuth.EMAIL,
-        passwordHash,
-        membresias: {
-          create: {
-            negocioId: user.negocioId,
-            rol: dto.rol,
-            topeDescuento: dto.topeDescuento ?? 0,
-            tiendas: {
-              create: (dto.tiendaIds ?? []).map((tiendaId) => ({ tiendaId })),
-            },
-          },
-        },
-      },
-      include: { membresias: { include: incluir } },
-    });
-
-    return this.formatear(usuario.membresias[0]);
-  }
-
   async update(id: string, dto: UpdateUsuarioDto, user: UsuarioActual) {
-    await this.buscarMembresia(id, user);
+    const membresia = await this.buscarMembresia(id, user);
 
-    // Un ADMIN no puede quitarse el rol ni desactivarse a sí mismo.
-    // Así evitamos que el negocio quede sin nadie que lo administre.
-    if (id === user.membresiaId) {
-      if ((dto.rol && dto.rol !== Rol.ADMIN) || dto.activo === false) {
-        throw new BadRequestException('No podés quitarte el rol de ADMIN ni desactivarte');
+    // El gerente solo activa o desactiva vendedores de sus tiendas
+    if (user.rol === Rol.GERENTE) {
+      if (membresia.rol !== Rol.VENDEDOR) {
+        throw new ForbiddenException('Un gerente solo puede gestionar vendedores');
+      }
+      const campos = Object.keys(sinIndefinidos(dto));
+      if (campos.some((c) => c !== 'activo')) {
+        throw new ForbiddenException('Un gerente solo puede activar o desactivar vendedores');
       }
     }
 
+    // Un ADMIN no puede quitarse el rol ni desactivarse a sí mismo
+    if (id === user.membresiaId && ((dto.rol && dto.rol !== Rol.ADMIN) || dto.activo === false)) {
+      throw new BadRequestException('No podés quitarte el rol de ADMIN ni desactivarte');
+    }
+
     await this.validarTiendas(dto.tiendaIds, user);
 
-    const membresia = await this.prisma.membresia.update({
+    const actualizada = await this.prisma.membresia.update({
       where: { id },
       data: {
         rol: dto.rol,
         topeDescuento: dto.topeDescuento,
         activo: dto.activo,
         tiendas: dto.tiendaIds
-          ? {
-              deleteMany: {}, // borra las asignaciones actuales
-              create: dto.tiendaIds.map((tiendaId) => ({ tiendaId })),
-            }
+          ? { deleteMany: {}, create: dto.tiendaIds.map((tiendaId) => ({ tiendaId })) }
           : undefined,
       },
       include: incluir,
     });
+    return this.formatear(actualizada);
+  }
 
-    return this.formatear(membresia);
+  // ---------- Internos ----------
+
+  // ADMIN ve a todos. GERENTE se ve a sí mismo y a los vendedores de sus tiendas.
+  private async filtroVisibilidad(user: UsuarioActual): Promise<Prisma.MembresiaWhereInput> {
+    const filtro: Prisma.MembresiaWhereInput = { negocioId: user.negocioId };
+    if (user.rol === Rol.GERENTE) {
+      const misTiendas = await this.tiendasDe(user.membresiaId);
+      filtro.OR = [
+        { id: user.membresiaId },
+        { rol: Rol.VENDEDOR, tiendas: { some: { tiendaId: { in: misTiendas } } } },
+      ];
+    }
+    return filtro;
   }
 
   private async buscarMembresia(id: string, user: UsuarioActual) {
     const membresia = await this.prisma.membresia.findFirst({
-      where: { id, negocioId: user.negocioId },
+      where: { id, ...(await this.filtroVisibilidad(user)) },
       include: incluir,
     });
     if (!membresia) throw new NotFoundException('Usuario no encontrado en tu negocio');
     return membresia;
   }
 
-  // Todas las tiendas tienen que existir, estar activas y ser del negocio
+  private async tiendasDe(membresiaId: string) {
+    const asignadas = await this.prisma.usuarioTienda.findMany({
+      where: { membresiaId },
+      select: { tiendaId: true },
+    });
+    return asignadas.map((a) => a.tiendaId);
+  }
+
   private async validarTiendas(tiendaIds: string[] | undefined, user: UsuarioActual) {
     if (!tiendaIds || tiendaIds.length === 0) return;
-
     const cantidad = await this.prisma.tienda.count({
       where: { id: { in: tiendaIds }, negocioId: user.negocioId, activa: true },
     });
@@ -125,7 +114,7 @@ export class UsuariosService {
 
   private formatear(m: MembresiaConDatos) {
     return {
-      id: m.id, // id de la membresía: es el que se usa en GET/PATCH /usuarios/:id
+      id: m.id,
       usuario: m.usuario,
       rol: m.rol,
       topeDescuento: m.topeDescuento,

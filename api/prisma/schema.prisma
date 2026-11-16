@@ -97,6 +97,12 @@ enum MotivoBaja {
   FUNDICION
   OTRO
 }
+
+enum EstadoInvitacion {
+  PENDIENTE
+  ACEPTADA
+  CANCELADA
+}
 // ---------- Organización ----------
 
 model Negocio {
@@ -119,6 +125,7 @@ model Negocio {
   piezas           Pieza[]
   lotes            Lote[]
   movimientosStock MovimientoStock[]
+  invitaciones Invitacion[]
 
   @@map("negocios")
 }
@@ -137,6 +144,7 @@ model Usuario {
   membresias Membresia[]
   preciosManualesCargados PrecioManualGramo[]
   movimientosStock MovimientoStock[]
+  invitacionesEnviadas Invitacion[]
 
   @@map("usuarios")
 }
@@ -380,4 +388,28 @@ model MovimientoStock {
   @@index([productoId])
   @@index([tiendaId])
   @@map("movimientos_stock")
+}
+
+// ---------- Invitaciones ----------
+
+model Invitacion {
+  id            String           @id @default(uuid()) @db.Uuid
+  negocioId     String           @map("negocio_id") @db.Uuid
+  email         String
+  rol           Rol
+  topeDescuento Decimal          @default(0) @map("tope_descuento") @db.Decimal(5, 2)
+  tiendaIds     String[]         @map("tienda_ids") @db.Uuid
+  tokenHash     String           @unique @map("token_hash")
+  venceEn       DateTime         @map("vence_en")
+  estado        EstadoInvitacion @default(PENDIENTE)
+  invitadoPorId String           @map("invitado_por_id") @db.Uuid
+  aceptadaEn    DateTime?        @map("aceptada_en")
+  creadoEn      DateTime         @default(now()) @map("creado_en")
+
+  negocio     Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  invitadoPor Usuario @relation(fields: [invitadoPorId], references: [id])
+
+  @@index([negocioId, estado])
+  @@index([email])
+  @@map("invitaciones")
 }

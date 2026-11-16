@@ -16,23 +16,26 @@ import { RolesGuard } from './auth/roles.guard.js';
 import { CategoriasModule } from './categorias/categorias.module.js';
 import { ProductosModule } from './productos/productos.module.js';
 import { StockModule } from './stock/stock.module.js';
+import { MailModule } from './mail/mail.module.js';
+import { InvitacionesModule } from './invitaciones/invitaciones.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    MailModule,
     AuthModule,
     TiendasModule,
     UsuariosModule,
     NegocioModule,
     CotizacionesModule,
     PreciosModule,
-    PreciosModule,
     CategoriasModule,
     ProductosModule,
     ProductosModule,
     StockModule,
+    InvitacionesModule,
   ],
   controllers: [AppController],
   providers: [
