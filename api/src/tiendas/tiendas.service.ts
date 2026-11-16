@@ -37,9 +37,19 @@ export class TiendasService {
   }
 
   async create(dto: CreateTiendaDto, user: UsuarioActual) {
+    // Punto de venta correlativo dentro del negocio: 1, 2, 3...
+    const ultimo = await this.prisma.tienda.aggregate({
+      where: { negocioId: user.negocioId },
+      _max: { puntoVenta: true },
+    });
     try {
       return await this.prisma.tienda.create({
-        data: { ...dto, nombre: dto.nombre.trim(), negocioId: user.negocioId },
+        data: {
+          ...dto,
+          nombre: dto.nombre.trim(),
+          negocioId: user.negocioId,
+          puntoVenta: (ultimo._max.puntoVenta ?? 0) + 1,
+        },
       });
     } catch (e) {
       this.manejarNombreDuplicado(e);

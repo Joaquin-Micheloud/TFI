@@ -487,7 +487,7 @@ export class StockService {
   }
 
   // La tienda tiene que ser del negocio y, salvo para el ADMIN, estar asignada al usuario
-  private async asegurarTienda(tiendaId: string, user: UsuarioActual, exigirActiva = true) {
+  async asegurarTienda(tiendaId: string, user: UsuarioActual, exigirActiva = true) {
     const tienda = await this.prisma.tienda.findFirst({
       where: { id: tiendaId, negocioId: user.negocioId },
     });
@@ -504,7 +504,7 @@ export class StockService {
   }
 
   // Filtro de tiendas para las consultas
-  private async filtroTiendas(user: UsuarioActual, tiendaId?: string) {
+  async filtroTiendas(user: UsuarioActual, tiendaId?: string) {
     if (tiendaId) {
       await this.asegurarTienda(tiendaId, user, false);
       return tiendaId;

@@ -103,6 +103,19 @@ enum EstadoInvitacion {
   ACEPTADA
   CANCELADA
 }
+
+enum EstadoVenta {
+  CONFIRMADA
+  ANULADA
+}
+
+enum MedioPago {
+  EFECTIVO_ARS
+  EFECTIVO_USD
+  TRANSFERENCIA
+  DEBITO
+  CREDITO
+}
 // ---------- Organización ----------
 
 model Negocio {
@@ -126,6 +139,7 @@ model Negocio {
   lotes            Lote[]
   movimientosStock MovimientoStock[]
   invitaciones Invitacion[]
+  ventas       Venta[]
 
   @@map("negocios")
 }
@@ -145,6 +159,7 @@ model Usuario {
   preciosManualesCargados PrecioManualGramo[]
   movimientosStock MovimientoStock[]
   invitacionesEnviadas Invitacion[]
+  ventas               Venta[]
 
   @@map("usuarios")
 }
@@ -175,6 +190,8 @@ model Tienda {
   localidad     String?
   provincia     String?
   activa        Boolean  @default(true)
+  puntoVenta        Int      @default(1) @map("punto_venta")
+  ultimoNumeroVenta Int      @default(0) @map("ultimo_numero_venta")
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
@@ -183,6 +200,7 @@ model Tienda {
   piezas           Pieza[]
   lotes            Lote[]
   movimientosStock MovimientoStock[]
+  ventas           Venta[]
 
   @@unique([negocioId, nombre])
   @@index([negocioId])
@@ -302,6 +320,7 @@ model Producto {
   piezas      Pieza[]
   lotes       Lote[]
   movimientos MovimientoStock[]
+  ventaItems  VentaItem[]
 
   @@unique([negocioId, codigo])
   @@unique([negocioId, codigoBarras])
@@ -331,6 +350,7 @@ model Pieza {
   producto    Producto          @relation(fields: [productoId], references: [id])
   tienda      Tienda            @relation(fields: [tiendaId], references: [id])
   movimientos MovimientoStock[]
+  ventaItems  VentaItem[]
 
   @@unique([negocioId, codigo])
   @@index([productoId, estado])
@@ -357,6 +377,7 @@ model Lote {
   producto    Producto          @relation(fields: [productoId], references: [id])
   tienda      Tienda            @relation(fields: [tiendaId], references: [id])
   movimientos MovimientoStock[]
+  ventaItems  VentaItem[]
 
   @@index([productoId, tiendaId, fechaIngreso])
   @@map("lotes")
@@ -412,4 +433,83 @@ model Invitacion {
   @@index([negocioId, estado])
   @@index([email])
   @@map("invitaciones")
+}
+
+// ---------- Ventas ----------
+
+model Venta {
+  id                String      @id @default(uuid()) @db.Uuid
+  negocioId         String      @map("negocio_id") @db.Uuid
+  tiendaId          String      @map("tienda_id") @db.Uuid
+  usuarioId         String      @map("usuario_id") @db.Uuid
+  puntoVenta        Int         @map("punto_venta")
+  numero            Int
+  fecha             DateTime    @default(now())
+  subtotal          Decimal     @db.Decimal(14, 2) // suma de precios de lista
+  descuentoPct      Decimal     @default(0) @map("descuento_pct") @db.Decimal(5, 2) // descuento sobre el total
+  descuentoTotal    Decimal     @map("descuento_total") @db.Decimal(14, 2) // todos los descuentos en pesos
+  total             Decimal     @db.Decimal(14, 2)
+  vuelto            Decimal     @default(0) @db.Decimal(14, 2)
+  tipoDolar         TipoDolar   @map("tipo_dolar")
+  dolarUsado        Decimal     @map("dolar_usado") @db.Decimal(14, 4)
+  cotizacionDolarId String?     @map("cotizacion_dolar_id") @db.Uuid
+  estado            EstadoVenta @default(CONFIRMADA)
+
+  negocio Negocio     @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  tienda  Tienda      @relation(fields: [tiendaId], references: [id])
+  usuario Usuario     @relation(fields: [usuarioId], references: [id])
+  items   VentaItem[]
+  pagos   Pago[]
+
+  @@unique([tiendaId, numero])
+  @@index([negocioId, fecha])
+  @@index([usuarioId, fecha])
+  @@map("ventas")
+}
+
+model VentaItem {
+  id                  String   @id @default(uuid()) @db.Uuid
+  ventaId             String   @map("venta_id") @db.Uuid
+  orden               Int
+  productoId          String   @map("producto_id") @db.Uuid
+  piezaId             String?  @map("pieza_id") @db.Uuid
+  loteId              String?  @map("lote_id") @db.Uuid
+  codigo              String
+  descripcion         String
+  cantidad            Int
+  precioListaUnitario Decimal  @map("precio_lista_unitario") @db.Decimal(14, 2)
+  descuentoPct        Decimal  @default(0) @map("descuento_pct") @db.Decimal(5, 2)
+  subtotal            Decimal  @db.Decimal(14, 2)
+  // Snapshot del cálculo
+  costoUnitario       Decimal  @map("costo_unitario") @db.Decimal(14, 2)
+  margenPct           Decimal  @map("margen_pct") @db.Decimal(6, 2)
+  metal               Metal?
+  ley                 Decimal? @db.Decimal(4, 3)
+  pesoGramos          Decimal? @map("peso_gramos") @db.Decimal(10, 3)
+  gramoUsado          Decimal? @map("gramo_usado") @db.Decimal(14, 2)
+  cotizacionMetalId   String?  @map("cotizacion_metal_id") @db.Uuid
+
+  venta    Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  producto Producto @relation(fields: [productoId], references: [id])
+  pieza    Pieza?   @relation(fields: [piezaId], references: [id])
+  lote     Lote?    @relation(fields: [loteId], references: [id])
+
+  @@index([ventaId])
+  @@index([productoId])
+  @@map("venta_items")
+}
+
+model Pago {
+  id         String    @id @default(uuid()) @db.Uuid
+  ventaId    String    @map("venta_id") @db.Uuid
+  medio      MedioPago
+  moneda     Moneda
+  monto      Decimal   @db.Decimal(14, 2) // en la moneda del pago
+  montoArs   Decimal   @map("monto_ars") @db.Decimal(14, 2)
+  cuotas     Int?
+  referencia String?
+
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@map("pagos")
 }

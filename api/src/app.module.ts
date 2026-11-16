@@ -18,6 +18,7 @@ import { ProductosModule } from './productos/productos.module.js';
 import { StockModule } from './stock/stock.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { InvitacionesModule } from './invitaciones/invitaciones.module.js';
+import { VentasModule } from './ventas/ventas.module.js';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { InvitacionesModule } from './invitaciones/invitaciones.module.js';
     ProductosModule,
     StockModule,
     InvitacionesModule,
+    VentasModule,
   ],
   controllers: [AppController],
   providers: [
