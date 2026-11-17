@@ -180,7 +180,7 @@ export function VenderPage() {
 
   return (
     <>
-      <Grid gutter="md">
+      <Grid>
         {/* ----- Izquierda: buscador y carrito ----- */}
         <Grid.Col span={{ base: 12, md: 7 }}>
           <Stack>
