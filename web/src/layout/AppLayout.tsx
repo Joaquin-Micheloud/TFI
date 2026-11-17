@@ -16,6 +16,7 @@ import { IconLogout } from '@tabler/icons-react';
 import { useAuth } from '../auth/AuthContext';
 import { NOMBRE_ROL } from '../lib/tipos';
 import { MENU } from './menu';
+import { Logo } from '../components/Logo';
 
 export function AppLayout() {
   const { sesion, cerrarSesion } = useAuth();
@@ -41,9 +42,7 @@ export function AppLayout() {
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">
             <Burger opened={menuAbierto} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={3} c="oro.8">
-              QuilateAr
-            </Title>
+            <Logo tamano={24} />
             <Text c="dimmed" size="sm" visibleFrom="xs">
               {sesion.negocio.nombre}
             </Text>

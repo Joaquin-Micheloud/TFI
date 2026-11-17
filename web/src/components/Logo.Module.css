@@ -1,0 +1,32 @@
+.logo {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.quilate {
+  color: var(--mantine-color-oro-8);
+}
+
+/* "AR" con la bandera: celeste / blanco / celeste */
+.ar {
+  /* Dónde empieza y termina la franja blanca. Si las franjas no quedan
+     parejas sobre las letras, ajustá estos dos valores. */
+  --corte-1: 42%;
+  --corte-2: 66%;
+
+  background: linear-gradient(
+    to bottom,
+    #74acdf 0%,
+    #74acdf var(--corte-1),
+    #ffffff var(--corte-1),
+    #ffffff var(--corte-2),
+    #74acdf var(--corte-2),
+    #74acdf 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1px #74acdf; /* contorno: hace visible la franja blanca */
+}

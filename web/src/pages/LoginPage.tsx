@@ -1,10 +1,11 @@
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
-import { Alert, Anchor, Button, Center, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Anchor, Button, Center, Paper, PasswordInput, Stack, Text, TextInput, } from '@mantine/core';
 import { isEmail, isNotEmpty, useForm } from '@mantine/form';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../lib/api';
 import type { RespuestaLogin } from '../lib/tipos';
+import { Logo } from '../components/Logo';
 
 export function LoginPage() {
   const { sesion, iniciarSesion } = useAuth();
@@ -37,9 +38,7 @@ export function LoginPage() {
         <form onSubmit={form.onSubmit((valores) => login.mutate(valores))}>
           <Stack>
             <div>
-              <Title order={2} c="oro.8">
-                QuilateAr
-              </Title>
+              <Logo tamano={32} />
               <Text c="dimmed" size="sm">
                 Ingresá a tu cuenta
               </Text>
@@ -54,7 +53,7 @@ export function LoginPage() {
             </Button>
 
             <Text size="sm" ta="center">
-              ¿Tenés una joyería y todavía no usás QuilateAr?{' '}
+              ¿Tenés una joyería y todavía no usás QuilateAR?{' '}
               <Anchor component={Link} to="/registro">
                 Registrate
               </Anchor>
