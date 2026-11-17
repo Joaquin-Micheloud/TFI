@@ -4,25 +4,25 @@ import { AppLayout } from './layout/AppLayout';
 import { InicioPage } from './pages/InicioPage';
 import { InvitacionPage } from './pages/InvitacionPage';
 import { LoginPage } from './pages/LoginPage';
-import { ProximamentePage } from './pages/ProximamentePage';
 import { RegistroPage } from './pages/RegistroPage';
-import { VenderPage } from './pages/vender/VenderPage';
+import { EquipoPage } from './pages/equipo/EquipoPage';
+import { NegocioPage } from './pages/negocio/NegocioPage';
+import { PreciosPage } from './pages/precios/PreciosPage';
 import { ProductosPage } from './pages/productos/ProductosPage';
 import { StockPage } from './pages/stock/StockPage';
-import { NegocioPage } from './pages/negocio/NegocioPage';
 import { TiendasPage } from './pages/tiendas/TiendasPage';
+import { VenderPage } from './pages/vender/VenderPage';
 import { VentasPage } from './pages/ventas/VentasPage';
 
 export default function App() {
   return (
     <Routes>
-      {/* Públicas */}
+      {/* ---------- Públicas ---------- */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/registro" element={<RegistroPage />} />
       <Route path="/invitacion" element={<InvitacionPage />} />
-      <Route path="ventas" element={<VentasPage />} />
 
-      {/* Con sesión: todas comparten el layout con menú */}
+      {/* ---------- Con sesión: todas adentro del layout ---------- */}
       <Route
         element={
           <RequireAuth>
@@ -32,14 +32,14 @@ export default function App() {
       >
         <Route index element={<InicioPage />} />
         <Route path="vender" element={<VenderPage />} />
-        <Route path="ventas" element={<ProximamentePage titulo="Ventas" />} />
+        <Route path="ventas" element={<VentasPage />} />
         <Route path="productos" element={<ProductosPage />} />
         <Route path="stock" element={<StockPage />} />
         <Route
           path="precios"
           element={
             <RequireAuth roles={['ADMIN']}>
-              <ProximamentePage titulo="Precios del gramo" />
+              <PreciosPage />
             </RequireAuth>
           }
         />
@@ -47,7 +47,7 @@ export default function App() {
           path="equipo"
           element={
             <RequireAuth roles={['ADMIN', 'GERENTE']}>
-              <ProximamentePage titulo="Equipo" />
+              <EquipoPage />
             </RequireAuth>
           }
         />
