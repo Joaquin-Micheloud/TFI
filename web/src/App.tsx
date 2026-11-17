@@ -13,6 +13,7 @@ import { StockPage } from './pages/stock/StockPage';
 import { TiendasPage } from './pages/tiendas/TiendasPage';
 import { VenderPage } from './pages/vender/VenderPage';
 import { VentasPage } from './pages/ventas/VentasPage';
+import { ClientesPage } from './pages/clientes/ClientesPage';
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
         <Route index element={<InicioPage />} />
         <Route path="vender" element={<VenderPage />} />
         <Route path="ventas" element={<VentasPage />} />
+        <Route path="clientes" element={<ClientesPage />} />
         <Route path="productos" element={<ProductosPage />} />
         <Route path="stock" element={<StockPage />} />
         <Route

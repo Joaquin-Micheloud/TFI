@@ -1,4 +1,5 @@
 import {
+  IconAddressBook,
   IconBuildingStore,
   IconCashRegister,
   IconCoin,
@@ -24,6 +25,7 @@ export const MENU: ItemMenu[] = [
   { etiqueta: 'Inicio', ruta: '/', icono: IconHome },
   { etiqueta: 'Vender', ruta: '/vender', icono: IconCashRegister },
   { etiqueta: 'Ventas', ruta: '/ventas', icono: IconReceipt },
+  { etiqueta: 'Clientes', ruta: '/clientes', icono: IconAddressBook },
   { etiqueta: 'Productos', ruta: '/productos', icono: IconDiamond },
   { etiqueta: 'Stock', ruta: '/stock', icono: IconPackage },
   { etiqueta: 'Precios', ruta: '/precios', icono: IconCoin, roles: ['ADMIN'] },

@@ -41,13 +41,13 @@ const incluirVenta = {
   pagos: true,
   tienda: { select: { id: true, nombre: true, direccion: true, localidad: true } },
   usuario: { select: { nombre: true, email: true } },
+  cliente: { select: { id: true, nombre: true, telefono: true, dni: true } },
   anuladaPor: { select: { nombre: true, email: true } },
   devoluciones: {
     include: { items: true, usuario: { select: { nombre: true, email: true } } },
     orderBy: { fecha: 'asc' },
   },
 } satisfies Prisma.VentaInclude;
-
 export type VentaCompleta = Prisma.VentaGetPayload<{ include: typeof incluirVenta }>;
 
 // Una línea del ticket ya calculada (todavía sin guardar)
@@ -85,6 +85,7 @@ export interface VentaPreparada {
   dolar: Dec;
   cotizacionDolarId: string;
   cotizacionFecha: Date;
+  clienteId: string | null;
 }
 
 @Injectable()
@@ -180,6 +181,7 @@ export class VentasService {
       await this.stock.asegurarTienda(query.tiendaId, user, false);
       where.tiendaId = query.tiendaId;
     }
+    if (query.clienteId) where.clienteId = query.clienteId;
     // Las fechas se interpretan en hora de Argentina (UTC-3, sin horario de verano)
     if (query.desde || query.hasta) {
       const inicioDelDia = (fecha: string) => new Date(`${fecha.slice(0, 10)}T00:00:00-03:00`);
@@ -202,6 +204,7 @@ export class VentasService {
           estado: true,
           tienda: { select: { nombre: true } },
           usuario: { select: { nombre: true } },
+          cliente: { select: { nombre: true } },
           _count: { select: { items: true, devoluciones: true } },
         },
         orderBy: { fecha: 'desc' },
@@ -325,6 +328,13 @@ export class VentasService {
 
   private async preparar(dto: CotizarVentaDto, user: UsuarioActual): Promise<VentaPreparada> {
     await this.stock.asegurarTienda(dto.tiendaId, user);
+    if (dto.clienteId) {
+      const cliente = await this.prisma.cliente.findFirst({
+        where: { id: dto.clienteId, negocioId: user.negocioId },
+        select: { id: true },
+      });
+      if (!cliente) throw new BadRequestException('El cliente no existe en tu negocio');
+    }
     const ctx = await this.precioGramo.contextoNegocio(user.negocioId);
 
     const gramos = new Map<string, Promise<GramoCalculado>>();
@@ -473,6 +483,7 @@ export class VentasService {
       dolar: ctx.dolar.valorVenta,
       cotizacionDolarId: ctx.dolar.id,
       cotizacionFecha: ctx.dolar.fechaHora,
+      clienteId: dto.clienteId ?? null,
     };
   }
 

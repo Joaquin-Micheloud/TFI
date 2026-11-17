@@ -146,6 +146,7 @@ model Negocio {
   invitaciones Invitacion[]
   ventas       Venta[]
   devoluciones Devolucion[]
+  clientes     Cliente[]
 
   @@map("negocios")
 }
@@ -466,11 +467,13 @@ model Venta {
   motivoAnulacion   String?     @map("motivo_anulacion")
   anuladaEn         DateTime?   @map("anulada_en")
   anuladaPorId      String?     @map("anulada_por_id") @db.Uuid
+  clienteId         String?     @map("cliente_id") @db.Uuid
 
   negocio      Negocio      @relation(fields: [negocioId], references: [id], onDelete: Cascade)
   tienda       Tienda       @relation(fields: [tiendaId], references: [id])
   usuario      Usuario      @relation("VentasRealizadas", fields: [usuarioId], references: [id])
   anuladaPor   Usuario?     @relation("VentasAnuladas", fields: [anuladaPorId], references: [id])
+  cliente      Cliente?     @relation(fields: [clienteId], references: [id])
   items        VentaItem[]
   pagos        Pago[]
   devoluciones Devolucion[]
@@ -479,6 +482,7 @@ model Venta {
   @@index([negocioId, fecha])
   @@index([usuarioId, fecha])
   @@map("ventas")
+  @@index([clienteId])
 }
 
 model VentaItem {
@@ -565,4 +569,25 @@ model DevolucionItem {
 
   @@index([ventaItemId])
   @@map("devolucion_items")
+}
+
+// ---------- Clientes ----------
+
+model Cliente {
+  id            String   @id @default(uuid()) @db.Uuid
+  negocioId     String   @map("negocio_id") @db.Uuid
+  nombre        String
+  telefono      String?
+  email         String?
+  dni           String? // solo números
+  notas         String?
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  ventas  Venta[]
+
+  @@unique([negocioId, dni])
+  @@index([negocioId, nombre])
+  @@map("clientes")
 }

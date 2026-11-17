@@ -1,10 +1,24 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class QueryVentasDto {
   @IsOptional()
   @IsUUID('all')
   tiendaId?: string;
+
+  @IsOptional()
+  @IsUUID('all')
+  clienteId?: string;
 
   // Fechas en formato AAAA-MM-DD
   @IsOptional()
@@ -33,7 +47,7 @@ export class QueryVentasDto {
 export class BuscarParaVenderDto {
   @IsUUID('all')
   tiendaId!: string;
-  
+
   @IsString()
   @MinLength(1)
   @MaxLength(50)

@@ -45,6 +45,7 @@ export interface VentaDetalle {
   totalDevuelto: string;
   tienda: { nombre: string };
   usuario: { nombre: string | null; email: string };
+  cliente: { id: string; nombre: string; telefono: string | null; dni: string | null } | null;
   items: ItemVenta[];
   pagos: { id: string; medio: MedioPago; moneda: 'ARS' | 'USD'; monto: string; montoArs: string; cuotas: number | null }[];
   devoluciones: DevolucionVenta[];

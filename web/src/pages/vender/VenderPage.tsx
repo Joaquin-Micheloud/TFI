@@ -31,6 +31,8 @@ import {
   type LoteEncontrado,
   type VentaConfirmada,
 } from './carrito';
+import { SelectorCliente } from '../../components/SelectorCliente';
+import type { Cliente } from '../../lib/clientes';
 
 interface Tienda {
   id: string;
@@ -44,6 +46,7 @@ export function VenderPage() {
   const [items, setItems] = useState<ItemCarrito[]>([]);
   const [descuentoGlobal, setDescuentoGlobal] = useState(0);
   const [pagos, setPagos] = useState<PagoCarrito[]>([]);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
   const [confirmada, setConfirmada] = useState<VentaConfirmada | null>(null);
 
   // ----- Tiendas -----
@@ -61,12 +64,14 @@ export function VenderPage() {
     setItems([]);
     setPagos([]);
     setDescuentoGlobal(0);
+    setCliente(null);
   };
 
   // ----- Cotización en vivo -----
   const pedido = useMemo(
     () => ({
       tiendaId,
+      clienteId: cliente?.id,
       descuentoPct: descuentoGlobal || undefined,
       items: items.map((i) =>
         i.piezaId
@@ -74,7 +79,7 @@ export function VenderPage() {
           : { productoId: i.productoId, loteId: i.loteId, cantidad: i.cantidad, descuentoPct: i.descuentoPct || undefined },
       ),
     }),
-    [tiendaId, descuentoGlobal, items],
+    [tiendaId, cliente, descuentoGlobal, items],
   );
   const [pedidoEstable] = useDebouncedValue(pedido, 300);
 
@@ -291,11 +296,16 @@ export function VenderPage() {
         <Grid.Col span={{ base: 12, md: 5 }}>
           <Stack>
             <Card withBorder>
+              <SelectorCliente value={cliente} onChange={setCliente} />
+            </Card>
+
+            <Card withBorder>
               <Stack gap="xs">
                 <Group justify="space-between">
                   <Text>Subtotal</Text>
                   <Text>{formatoPesos(cot?.subtotal ?? 0)}</Text>
                 </Group>
+                ...
                 <NumberInput
                   label="Descuento sobre el total"
                   size="xs"

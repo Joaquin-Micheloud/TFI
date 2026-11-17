@@ -15,6 +15,7 @@ interface VentaResumen {
   estado: 'CONFIRMADA' | 'ANULADA';
   tienda: { nombre: string };
   usuario: { nombre: string | null };
+  cliente: { nombre: string } | null;
   _count: { items: number; devoluciones: number };
 }
 
@@ -87,6 +88,7 @@ export function VentasPage() {
               <Table.Th>Fecha</Table.Th>
               <Table.Th>Tienda</Table.Th>
               <Table.Th>Vendedor</Table.Th>
+              <Table.Th>Cliente</Table.Th>
               <Table.Th ta="right">Ítems</Table.Th>
               <Table.Th ta="right">Total</Table.Th>
               <Table.Th />
@@ -103,6 +105,7 @@ export function VentasPage() {
                 <Table.Td>{formatoFechaHora(v.fecha)}</Table.Td>
                 <Table.Td>{v.tienda.nombre}</Table.Td>
                 <Table.Td>{v.usuario.nombre ?? '—'}</Table.Td>
+                <Table.Td>{v.cliente?.nombre ?? '—'}</Table.Td>
                 <Table.Td ta="right">{v._count.items}</Table.Td>
                 <Table.Td ta="right" fw={600}>
                   {formatoPesos(v.total)}
@@ -123,7 +126,7 @@ export function VentasPage() {
             ))}
             {ventas.data?.items.length === 0 && (
               <Table.Tr>
-                <Table.Td colSpan={7}>
+                <Table.Td colSpan={8}>
                   <Text size="sm" c="dimmed" ta="center" py="md">
                     No hay ventas con esos filtros.
                   </Text>

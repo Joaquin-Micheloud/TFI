@@ -67,6 +67,7 @@ export class TicketService {
     centrado(`TICKET N° ${numeroTicket(venta.puntoVenta, venta.numero)}`, 9, true);
     centrado(venta.fecha.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }));
     centrado(`Atendió: ${venta.usuario.nombre ?? venta.usuario.email}`);
+    if (venta.cliente) centrado(`Cliente: ${venta.cliente.nombre}`);
     if (venta.estado === 'ANULADA') centrado('*** VENTA ANULADA ***', 10, true);
     separador();
 

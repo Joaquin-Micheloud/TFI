@@ -19,6 +19,7 @@ import { StockModule } from './stock/stock.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { InvitacionesModule } from './invitaciones/invitaciones.module.js';
 import { VentasModule } from './ventas/ventas.module.js';
+import { ClientesModule } from './clientes/clientes.module.js';
 
 @Module({
   imports: [
@@ -44,6 +45,8 @@ import { VentasModule } from './ventas/ventas.module.js';
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    VentasModule,
+    ClientesModule,
   ],
 })
 export class AppModule {}

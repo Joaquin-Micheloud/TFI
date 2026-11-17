@@ -70,6 +70,9 @@ export class PagoDto {
 export class CotizarVentaDto {
   @IsUUID('all')
   tiendaId!: string;
+  @IsOptional()
+  @IsUUID('all')
+  clienteId?: string;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'La venta tiene que tener al menos un ítem' })

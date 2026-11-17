@@ -48,6 +48,13 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
           <Text size="sm" c="dimmed">
             {formatoFechaHora(v.fecha)} · {v.tienda.nombre} · {nombre(v.usuario)}
           </Text>
+          {v.cliente && (
+            <Text size="sm">
+              Cliente: <b>{v.cliente.nombre}</b>
+              {v.cliente.dni ? ` · DNI ${v.cliente.dni}` : ''}
+              {v.cliente.telefono ? ` · ${v.cliente.telefono}` : ''}
+            </Text>
+          )}
         </div>
         <Group gap={6}>
           {v.devoluciones.length > 0 && (
