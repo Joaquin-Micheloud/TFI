@@ -9,6 +9,9 @@ import { RegistroPage } from './pages/RegistroPage';
 import { VenderPage } from './pages/vender/VenderPage';
 import { ProductosPage } from './pages/productos/ProductosPage';
 import { StockPage } from './pages/stock/StockPage';
+import { NegocioPage } from './pages/negocio/NegocioPage';
+import { TiendasPage } from './pages/tiendas/TiendasPage';
+import { VentasPage } from './pages/ventas/VentasPage';
 
 export default function App() {
   return (
@@ -17,6 +20,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/registro" element={<RegistroPage />} />
       <Route path="/invitacion" element={<InvitacionPage />} />
+      <Route path="ventas" element={<VentasPage />} />
 
       {/* Con sesión: todas comparten el layout con menú */}
       <Route
@@ -51,7 +55,7 @@ export default function App() {
           path="tiendas"
           element={
             <RequireAuth roles={['ADMIN']}>
-              <ProximamentePage titulo="Tiendas" />
+              <TiendasPage />
             </RequireAuth>
           }
         />
@@ -59,7 +63,7 @@ export default function App() {
           path="negocio"
           element={
             <RequireAuth roles={['ADMIN']}>
-              <ProximamentePage titulo="Datos del negocio" />
+              <NegocioPage />
             </RequireAuth>
           }
         />

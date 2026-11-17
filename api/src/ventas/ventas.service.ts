@@ -175,11 +175,13 @@ export class VentasService {
       await this.stock.asegurarTienda(query.tiendaId, user, false);
       where.tiendaId = query.tiendaId;
     }
+    // Las fechas se interpretan en hora de Argentina (UTC-3, sin horario de verano)
     if (query.desde || query.hasta) {
+      const inicioDelDia = (fecha: string) => new Date(`${fecha.slice(0, 10)}T00:00:00-03:00`);
       where.fecha = {
-        gte: query.desde ? new Date(query.desde) : undefined,
+        gte: query.desde ? inicioDelDia(query.desde) : undefined,
         // "hasta" incluye todo ese día
-        lt: query.hasta ? new Date(new Date(query.hasta).getTime() + 86_400_000) : undefined,
+        lt: query.hasta ? new Date(inicioDelDia(query.hasta).getTime() + 86_400_000) : undefined,
       };
     }
 

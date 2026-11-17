@@ -7,6 +7,7 @@ import type { RespuestaLogin, RespuestaMe, Sesion } from '../lib/tipos';
 interface AuthContextValue {
   sesion: Sesion | null;
   cargando: boolean;
+  actualizarSesion: (cambios: Partial<Sesion>) => void;
   iniciarSesion: (respuesta: RespuestaLogin) => void;
   cerrarSesion: () => void;
 }
@@ -30,6 +31,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSesion({ usuario: respuesta.usuario, negocio: respuesta.negocio, rol: respuesta.rol });
   }, []);
 
+  const actualizarSesion = useCallback((cambios: Partial<Sesion>) => {
+    setSesion((actual) => (actual ? { ...actual, ...cambios } : actual));
+  }, []);
+
   // Al abrir la app: si hay token, recuperamos la sesión
   useEffect(() => {
     if (!tokenStorage.get()) return;
@@ -50,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [cerrarSesion]);
 
   return (
-    <AuthContext.Provider value={{ sesion, cargando, iniciarSesion, cerrarSesion }}>
+    <AuthContext.Provider value={{ sesion, cargando, iniciarSesion, cerrarSesion, actualizarSesion }}>
       {children}
     </AuthContext.Provider>
   );
