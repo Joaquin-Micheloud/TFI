@@ -116,6 +116,11 @@ enum MedioPago {
   DEBITO
   CREDITO
 }
+
+enum DestinoDevolucion {
+  STOCK // vuelve a estar disponible
+  BAJA  // vino dañado: se da de baja
+}
 // ---------- Organización ----------
 
 model Negocio {
@@ -140,6 +145,7 @@ model Negocio {
   movimientosStock MovimientoStock[]
   invitaciones Invitacion[]
   ventas       Venta[]
+  devoluciones Devolucion[]
 
   @@map("negocios")
 }
@@ -159,7 +165,10 @@ model Usuario {
   preciosManualesCargados PrecioManualGramo[]
   movimientosStock MovimientoStock[]
   invitacionesEnviadas Invitacion[]
-  ventas               Venta[]
+  ventas               Venta[]      @relation("VentasRealizadas")
+  ventasAnuladas       Venta[]      @relation("VentasAnuladas")
+  devoluciones         Devolucion[]
+
 
   @@map("usuarios")
 }
@@ -454,12 +463,17 @@ model Venta {
   dolarUsado        Decimal     @map("dolar_usado") @db.Decimal(14, 4)
   cotizacionDolarId String?     @map("cotizacion_dolar_id") @db.Uuid
   estado            EstadoVenta @default(CONFIRMADA)
+  motivoAnulacion   String?     @map("motivo_anulacion")
+  anuladaEn         DateTime?   @map("anulada_en")
+  anuladaPorId      String?     @map("anulada_por_id") @db.Uuid
 
-  negocio Negocio     @relation(fields: [negocioId], references: [id], onDelete: Cascade)
-  tienda  Tienda      @relation(fields: [tiendaId], references: [id])
-  usuario Usuario     @relation(fields: [usuarioId], references: [id])
-  items   VentaItem[]
-  pagos   Pago[]
+  negocio      Negocio      @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  tienda       Tienda       @relation(fields: [tiendaId], references: [id])
+  usuario      Usuario      @relation("VentasRealizadas", fields: [usuarioId], references: [id])
+  anuladaPor   Usuario?     @relation("VentasAnuladas", fields: [anuladaPorId], references: [id])
+  items        VentaItem[]
+  pagos        Pago[]
+  devoluciones Devolucion[]
 
   @@unique([tiendaId, numero])
   @@index([negocioId, fecha])
@@ -493,6 +507,7 @@ model VentaItem {
   producto Producto @relation(fields: [productoId], references: [id])
   pieza    Pieza?   @relation(fields: [piezaId], references: [id])
   lote     Lote?    @relation(fields: [loteId], references: [id])
+  devolucionItems DevolucionItem[]
 
   @@index([ventaId])
   @@index([productoId])
@@ -511,5 +526,43 @@ model Pago {
 
   venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
 
+
   @@map("pagos")
+}
+
+// ---------- Devoluciones ----------
+
+model Devolucion {
+  id             String    @id @default(uuid()) @db.Uuid
+  negocioId      String    @map("negocio_id") @db.Uuid
+  ventaId        String    @map("venta_id") @db.Uuid
+  usuarioId      String    @map("usuario_id") @db.Uuid
+  motivo         String
+  medioReintegro MedioPago @map("medio_reintegro")
+  montoArs       Decimal   @map("monto_ars") @db.Decimal(14, 2) // lo que se le devuelve al cliente
+  fecha          DateTime  @default(now())
+
+  negocio Negocio          @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  venta   Venta            @relation(fields: [ventaId], references: [id])
+  usuario Usuario          @relation(fields: [usuarioId], references: [id])
+  items   DevolucionItem[]
+
+  @@index([ventaId])
+  @@index([negocioId, fecha])
+  @@map("devoluciones")
+}
+
+model DevolucionItem {
+  id           String            @id @default(uuid()) @db.Uuid
+  devolucionId String            @map("devolucion_id") @db.Uuid
+  ventaItemId  String            @map("venta_item_id") @db.Uuid
+  cantidad     Int
+  montoArs     Decimal           @map("monto_ars") @db.Decimal(14, 2)
+  destino      DestinoDevolucion
+
+  devolucion Devolucion @relation(fields: [devolucionId], references: [id], onDelete: Cascade)
+  ventaItem  VentaItem  @relation(fields: [ventaItemId], references: [id])
+
+  @@index([ventaItemId])
+  @@map("devolucion_items")
 }

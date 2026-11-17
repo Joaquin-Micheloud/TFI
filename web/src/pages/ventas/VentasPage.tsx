@@ -15,7 +15,7 @@ interface VentaResumen {
   estado: 'CONFIRMADA' | 'ANULADA';
   tienda: { nombre: string };
   usuario: { nombre: string | null };
-  _count: { items: number };
+  _count: { items: number; devoluciones: number };
 }
 
 const POR_PAGINA = 20;
@@ -111,6 +111,11 @@ export function VentasPage() {
                   {v.estado === 'ANULADA' && (
                     <Badge color="red" size="xs">
                       Anulada
+                    </Badge>
+                  )}
+                  {v._count.devoluciones > 0 && (
+                    <Badge color="grape" size="xs" variant="light">
+                      Devolución
                     </Badge>
                   )}
                 </Table.Td>

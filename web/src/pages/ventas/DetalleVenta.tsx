@@ -1,45 +1,14 @@
+import { useState } from 'react';
 import { Alert, Badge, Button, Card, Group, Loader, Stack, Table, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { IconPrinter } from '@tabler/icons-react';
+import { IconArrowBackUp, IconBan, IconPrinter } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 import { api } from '../../lib/api';
 import { formatoFechaHora, formatoPesos, formatoUsd, nombreLey } from '../../lib/formato';
 import { abrirTicket } from '../../lib/ticket';
-import { NOMBRE_MEDIO, type MedioPago } from '../vender/carrito';
-
-interface ItemVenta {
-  id: string;
-  codigo: string;
-  descripcion: string;
-  cantidad: number;
-  precioListaUnitario: string;
-  descuentoPct: string;
-  subtotal: string;
-  costoUnitario?: string;
-  margenPct?: string;
-  metal: 'ORO' | 'PLATA' | null;
-  ley: string | null;
-  pesoGramos: string | null;
-  gramoUsado: string | null;
-}
-
-interface VentaDetalle {
-  id: string;
-  numeroFormateado: string;
-  fecha: string;
-  estado: 'CONFIRMADA' | 'ANULADA';
-  subtotal: string;
-  descuentoPct: string;
-  descuentoTotal: string;
-  total: string;
-  vuelto: string;
-  tipoDolar: string;
-  dolarUsado: string;
-  tienda: { nombre: string };
-  usuario: { nombre: string | null; email: string };
-  items: ItemVenta[];
-  pagos: { id: string; medio: MedioPago; moneda: 'ARS' | 'USD'; monto: string; montoArs: string; cuotas: number | null }[];
-}
+import { NOMBRE_MEDIO } from '../vender/carrito';
+import { AnularVentaModal, DevolucionModal } from './AccionesVenta';
+import type { VentaDetalle } from './tipos';
 
 const Fila = ({ izquierda, derecha, fuerte }: { izquierda: string; derecha: string; fuerte?: boolean }) => (
   <Group justify="space-between">
@@ -55,6 +24,8 @@ const Fila = ({ izquierda, derecha, fuerte }: { izquierda: string; derecha: stri
 export function DetalleVenta({ ventaId }: { ventaId: string }) {
   const { sesion } = useAuth();
   const veCostos = sesion?.rol !== 'VENDEDOR';
+  const puedeGestionar = sesion?.rol === 'ADMIN' || sesion?.rol === 'GERENTE';
+  const [accion, setAccion] = useState<'anular' | 'devolver' | null>(null);
 
   const venta = useQuery({
     queryKey: ['ventas', 'detalle', ventaId],
@@ -65,21 +36,51 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
   if (venta.isError) return <Alert color="red">{venta.error.message}</Alert>;
   const v = venta.data!;
 
+  const anulada = v.estado === 'ANULADA';
+  const quedaPorDevolver = v.items.some((i) => i.cantidad > i.cantidadDevuelta);
+  const nombre = (u: { nombre: string | null; email: string }) => u.nombre ?? u.email;
+
   return (
     <Stack>
       <Group justify="space-between" align="flex-start">
         <div>
           <Title order={4}>Ticket {v.numeroFormateado}</Title>
           <Text size="sm" c="dimmed">
-            {formatoFechaHora(v.fecha)} · {v.tienda.nombre} · {v.usuario.nombre ?? v.usuario.email}
+            {formatoFechaHora(v.fecha)} · {v.tienda.nombre} · {nombre(v.usuario)}
           </Text>
         </div>
-        <Badge color={v.estado === 'ANULADA' ? 'red' : 'green'}>{v.estado === 'ANULADA' ? 'Anulada' : 'Confirmada'}</Badge>
+        <Group gap={6}>
+          {v.devoluciones.length > 0 && (
+            <Badge color="grape" variant="light">
+              Con devolución
+            </Badge>
+          )}
+          <Badge color={anulada ? 'red' : 'green'}>{anulada ? 'Anulada' : 'Confirmada'}</Badge>
+        </Group>
       </Group>
 
-      <Button variant="light" leftSection={<IconPrinter size={16} />} onClick={() => abrirTicket(v.id)}>
-        Reimprimir ticket
-      </Button>
+      {anulada && (
+        <Alert color="red" title="Venta anulada">
+          {v.anuladaPor && `${nombre(v.anuladaPor)} la anuló`}
+          {v.anuladaEn && ` el ${formatoFechaHora(v.anuladaEn)}`}. Motivo: {v.motivoAnulacion}
+        </Alert>
+      )}
+
+      <Group grow>
+        <Button variant="light" leftSection={<IconPrinter size={16} />} onClick={() => abrirTicket(v.id)}>
+          Reimprimir ticket
+        </Button>
+        {puedeGestionar && !anulada && quedaPorDevolver && (
+          <Button variant="light" color="grape" leftSection={<IconArrowBackUp size={16} />} onClick={() => setAccion('devolver')}>
+            Devolución
+          </Button>
+        )}
+        {puedeGestionar && !anulada && v.devoluciones.length === 0 && (
+          <Button variant="light" color="red" leftSection={<IconBan size={16} />} onClick={() => setAccion('anular')}>
+            Anular
+          </Button>
+        )}
+      </Group>
 
       <Card withBorder p={0}>
         <Table fz="sm">
@@ -95,10 +96,16 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
             {v.items.map((i) => (
               <Table.Tr key={i.id}>
                 <Table.Td>
-                  <Text size="sm" fw={500}>
-                    {i.codigo} · {i.descripcion}
-                  </Text>
-                  {/* Snapshot: los datos con los que se calculó el precio */}
+                  <Group gap={6}>
+                    <Text size="sm" fw={500}>
+                      {i.codigo} · {i.descripcion}
+                    </Text>
+                    {i.cantidadDevuelta > 0 && (
+                      <Badge size="xs" color="grape" variant="light">
+                        {i.cantidadDevuelta === i.cantidad ? 'Devuelto' : `${i.cantidadDevuelta} devueltas`}
+                      </Badge>
+                    )}
+                  </Group>
                   <Text size="xs" c="dimmed">
                     {[
                       i.pesoGramos ? `${Number(i.pesoGramos).toLocaleString('es-AR')} g` : null,
@@ -134,6 +141,12 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
             />
           )}
           <Fila izquierda="Total" derecha={formatoPesos(v.total)} fuerte />
+          {Number(v.totalDevuelto) > 0 && (
+            <>
+              <Fila izquierda="Reintegrado por devoluciones" derecha={`-${formatoPesos(v.totalDevuelto)}`} />
+              <Fila izquierda="Neto" derecha={formatoPesos(Number(v.total) - Number(v.totalDevuelto))} fuerte />
+            </>
+          )}
         </Stack>
       </Card>
 
@@ -153,10 +166,37 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
         </Stack>
       </Card>
 
+      {v.devoluciones.length > 0 && (
+        <Card withBorder>
+          <Stack gap="xs">
+            <Text size="sm" fw={600}>
+              Devoluciones
+            </Text>
+            {v.devoluciones.map((d) => (
+              <div key={d.id}>
+                <Fila izquierda={`${formatoFechaHora(d.fecha)} · ${nombre(d.usuario)}`} derecha={`-${formatoPesos(d.montoArs)}`} />
+                <Text size="xs" c="dimmed">
+                  {d.motivo} · reintegro en {NOMBRE_MEDIO[d.medioReintegro].toLowerCase()} ·{' '}
+                  {d.items
+                    .map((di) => {
+                      const item = v.items.find((i) => i.id === di.ventaItemId);
+                      return `${di.cantidad} × ${item?.codigo}${di.destino === 'BAJA' ? ' (dado de baja)' : ''}`;
+                    })
+                    .join(', ')}
+                </Text>
+              </div>
+            ))}
+          </Stack>
+        </Card>
+      )}
+
       <Text size="xs" c="dimmed">
         Dólar {v.tipoDolar.toLowerCase()} usado: {formatoPesos(v.dolarUsado)}. Los precios quedaron congelados al
         momento de la venta y no cambian aunque cambien las cotizaciones.
       </Text>
+
+      {accion === 'anular' && <AnularVentaModal venta={v} onClose={() => setAccion(null)} />}
+      {accion === 'devolver' && <DevolucionModal venta={v} onClose={() => setAccion(null)} />}
     </Stack>
   );
 }

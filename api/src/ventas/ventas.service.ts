@@ -41,6 +41,11 @@ const incluirVenta = {
   pagos: true,
   tienda: { select: { id: true, nombre: true, direccion: true, localidad: true } },
   usuario: { select: { nombre: true, email: true } },
+  anuladaPor: { select: { nombre: true, email: true } },
+  devoluciones: {
+    include: { items: true, usuario: { select: { nombre: true, email: true } } },
+    orderBy: { fecha: 'asc' },
+  },
 } satisfies Prisma.VentaInclude;
 
 export type VentaCompleta = Prisma.VentaGetPayload<{ include: typeof incluirVenta }>;
@@ -197,7 +202,7 @@ export class VentasService {
           estado: true,
           tienda: { select: { nombre: true } },
           usuario: { select: { nombre: true } },
-          _count: { select: { items: true } },
+          _count: { select: { items: true, devoluciones: true } },
         },
         orderBy: { fecha: 'desc' },
         skip: (query.pagina - 1) * query.porPagina,
@@ -593,10 +598,22 @@ export class VentasService {
   }
 
   // El vendedor no ve costos ni márgenes
+  // Agrega cuánto se devolvió de cada ítem. El vendedor no ve costos ni márgenes.
   private presentarVenta(v: VentaCompleta, user: UsuarioActual) {
-    const base = { ...v, numeroFormateado: numeroTicket(v.puntoVenta, v.numero) };
-    if (user.rol !== Rol.VENDEDOR) return base;
-    return { ...base, items: v.items.map(({ costoUnitario, margenPct, ...item }) => item) };
+    const devuelto = new Map<string, number>();
+    for (const d of v.devoluciones) {
+      for (const i of d.items) devuelto.set(i.ventaItemId, (devuelto.get(i.ventaItemId) ?? 0) + i.cantidad);
+    }
+
+    const items = v.items.map((item) => {
+      const conDevuelto = { ...item, cantidadDevuelta: devuelto.get(item.id) ?? 0 };
+      if (user.rol !== Rol.VENDEDOR) return conDevuelto;
+      const { costoUnitario, margenPct, ...publico } = conDevuelto;
+      return publico;
+    });
+
+    const totalDevuelto = v.devoluciones.reduce((s, d) => s.plus(d.montoArs), new Prisma.Decimal(0));
+    return { ...v, items, totalDevuelto, numeroFormateado: numeroTicket(v.puntoVenta, v.numero) };
   }
 
   private presentarPreparada(p: VentaPreparada, user: UsuarioActual) {
