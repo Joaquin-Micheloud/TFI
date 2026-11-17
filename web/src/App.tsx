@@ -8,6 +8,7 @@ import { ProximamentePage } from './pages/ProximamentePage';
 import { RegistroPage } from './pages/RegistroPage';
 import { VenderPage } from './pages/vender/VenderPage';
 import { ProductosPage } from './pages/productos/ProductosPage';
+import { StockPage } from './pages/stock/StockPage';
 
 export default function App() {
   return (
@@ -29,7 +30,7 @@ export default function App() {
         <Route path="vender" element={<VenderPage />} />
         <Route path="ventas" element={<ProximamentePage titulo="Ventas" />} />
         <Route path="productos" element={<ProductosPage />} />
-        <Route path="stock" element={<ProximamentePage titulo="Stock" />} />
+        <Route path="stock" element={<StockPage />} />
         <Route
           path="precios"
           element={
