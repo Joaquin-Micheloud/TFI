@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Button, Card, Group, Stack, Switch, Table, Text, Tooltip } from '@mantine/core';
+import { Badge, Button, Card, Group, Stack, Switch, Table, Text, Tooltip } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { SelectorProducto } from '../../components/SelectorProducto';
 import { SelectorTienda } from '../../components/SelectorTienda';
 import { api } from '../../lib/api';
 import type { Producto } from '../../lib/catalogo';
 import { formatoFechaHora, formatoPesos, formatoUsd } from '../../lib/formato';
-import type { Lote } from '../../lib/stock';
+import { numerarLotes, type Lote } from '../../lib/stock';
 import { AccionLoteModal } from './AccionesStock';
+
 
 export function LotesTab({ puedeEditar }: { puedeEditar: boolean }) {
   const [tiendaId, setTiendaId] = useState<string | null>(null);
@@ -24,6 +25,8 @@ export function LotesTab({ puedeEditar }: { puedeEditar: boolean }) {
     queryKey: ['stock', 'lotes', parametros.toString()],
     queryFn: () => api<{ items: Lote[] }>(`/stock/lotes?${parametros}`),
   });
+
+  const numeros = numerarLotes(lotes.data?.items ?? []);
 
   return (
     <Stack>
@@ -55,9 +58,20 @@ export function LotesTab({ puedeEditar }: { puedeEditar: boolean }) {
             {lotes.data?.items.map((l) => (
               <Table.Tr key={l.id}>
                 <Table.Td>
-                  <Text size="sm" fw={500}>
-                    {l.producto.codigo} · {l.producto.nombre}
-                  </Text>
+                  <Group gap={6} wrap="nowrap">
+                    <Text size="sm" fw={500}>
+                      {l.producto.codigo} · {l.producto.nombre}
+                    </Text>
+                    {numeros.has(l.id) ? (
+                      <Badge size="xs" variant="outline">
+                        Lote {numeros.get(l.id)}
+                      </Badge>
+                    ) : (
+                      <Badge size="xs" color="gray">
+                        Agotado
+                      </Badge>
+                    )}
+                  </Group>
                 </Table.Td>
                 <Table.Td>{l.tienda.nombre}</Table.Td>
                 <Table.Td>{formatoFechaHora(l.fechaIngreso)}</Table.Td>

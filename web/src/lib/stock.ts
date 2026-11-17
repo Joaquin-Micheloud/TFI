@@ -119,3 +119,19 @@ export interface Movimiento {
   pieza: { codigo: string } | null;
   usuario: { nombre: string | null; email: string };
 }
+
+// Numera los lotes igual que el punto de venta: por producto y tienda, del más
+// antiguo al más nuevo, contando solo los que tienen unidades.
+// Espera los lotes ordenados por fecha de ingreso (la API ya los devuelve así).
+export function numerarLotes(lotes: Lote[]) {
+  const contador = new Map<string, number>();
+  const numeros = new Map<string, number>();
+  for (const l of lotes) {
+    if (l.cantidadDisponible <= 0) continue;
+    const clave = `${l.producto.id}-${l.tienda.id}`;
+    const numero = (contador.get(clave) ?? 0) + 1;
+    contador.set(clave, numero);
+    numeros.set(l.id, numero);
+  }
+  return numeros;
+}

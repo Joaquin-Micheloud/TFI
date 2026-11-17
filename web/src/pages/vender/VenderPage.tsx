@@ -28,7 +28,7 @@ import {
   type ItemCarrito,
   type PagoCarrito,
   type PiezaEncontrada,
-  type ProductoEncontrado,
+  type LoteEncontrado,
   type VentaConfirmada,
 } from './carrito';
 
@@ -71,7 +71,7 @@ export function VenderPage() {
       items: items.map((i) =>
         i.piezaId
           ? { piezaId: i.piezaId, descuentoPct: i.descuentoPct || undefined }
-          : { productoId: i.productoId, cantidad: i.cantidad, descuentoPct: i.descuentoPct || undefined },
+          : { productoId: i.productoId, loteId: i.loteId, cantidad: i.cantidad, descuentoPct: i.descuentoPct || undefined },
       ),
     }),
     [tiendaId, descuentoGlobal, items],
@@ -138,24 +138,27 @@ export function VenderPage() {
     ]);
   };
 
-  const agregarProducto = (p: ProductoEncontrado) => {
+  // Cada lote es un ítem distinto: se vende de ese lote y a su precio
+  const agregarLote = (l: LoteEncontrado) => {
     setItems((prev) => {
-      const existente = prev.find((i) => i.productoId === p.productoId);
+      const existente = prev.find((i) => i.loteId === l.loteId);
       if (existente) {
         return prev.map((i) =>
-          i === existente ? { ...i, cantidad: Math.min(i.cantidad + 1, p.disponible) } : i,
+          i === existente ? { ...i, cantidad: Math.min(i.cantidad + 1, l.disponible) } : i,
         );
       }
+      const peso = l.pesoUnitario ? ` · ${Number(l.pesoUnitario).toLocaleString('es-AR')} g` : '';
       return [
         ...prev,
         {
           clave: crypto.randomUUID(),
-          productoId: p.productoId,
+          productoId: l.producto.id,
+          loteId: l.loteId,
           cantidad: 1,
           descuentoPct: 0,
-          etiqueta: `${p.codigo} · ${p.nombre}`,
-          detalle: `${p.disponible} disponibles`,
-          maximo: p.disponible,
+          etiqueta: `${l.producto.codigo} · ${l.producto.nombre} · Lote ${l.numeroLote}`,
+          detalle: `Ingresó ${new Date(l.fechaIngreso).toLocaleDateString('es-AR')}${peso} · ${l.disponible} disponibles`,
+          maximo: l.disponible,
         },
       ];
     });
@@ -200,7 +203,7 @@ export function VenderPage() {
               tiendaId={tiendaId}
               piezasEnCarrito={items.flatMap((i) => (i.piezaId ? [i.piezaId] : []))}
               onAgregarPieza={agregarPieza}
-              onAgregarProducto={agregarProducto}
+              onAgregarLote={agregarLote}
             />
 
             <Card withBorder p={0}>

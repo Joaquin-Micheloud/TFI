@@ -5,19 +5,23 @@ import { notifications } from '@mantine/notifications';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconSearch } from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import type { PiezaEncontrada, ProductoEncontrado, ResultadoBusqueda } from './carrito';
+import { formatoPesos } from '../../lib/formato';
+import type { LoteEncontrado, PiezaEncontrada, ResultadoBusqueda } from './carrito';
 
 interface Props {
   tiendaId: string;
   piezasEnCarrito: string[];
   onAgregarPieza: (pieza: PiezaEncontrada) => void;
-  onAgregarProducto: (producto: ProductoEncontrado) => void;
+  onAgregarLote: (lote: LoteEncontrado) => void;
 }
 
-export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarProducto }: Props) {
+const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-AR');
+const gramos = (g: string | null) => (g ? `${Number(g).toLocaleString('es-AR')} g` : null);
+
+export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarLote }: Props) {
   const queryClient = useQueryClient();
   const [texto, setTexto] = useState('');
-  const [busqueda] = useDebouncedValue(texto.trim(), 300); // espera a que se deje de escribir
+  const [busqueda] = useDebouncedValue(texto.trim(), 300);
 
   const consulta = (q: string) => ({
     queryKey: ['vender', 'buscar', tiendaId, q],
@@ -27,8 +31,10 @@ export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarP
 
   const resultados = useQuery({ ...consulta(busqueda), enabled: !!tiendaId && busqueda.length >= 2 });
 
-  // Enter: si el código coincide exacto (o hay un único resultado), se agrega directo.
-  // Así funciona con un lector de código de barras.
+  // Enter (o lector de código de barras):
+  // - código de pieza exacto → esa pieza
+  // - código de producto por lote → el lote más antiguo (FIFO)
+  // - un único resultado → ese
   const alPresionarEnter = async () => {
     const q = texto.trim();
     if (!q || !tiendaId) return;
@@ -36,28 +42,20 @@ export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarP
       const r = await queryClient.fetchQuery(consulta(q));
       const codigo = q.toUpperCase();
 
-      const pieza =
-        r.piezas.find((p) => p.codigo.toUpperCase() === codigo) ??
-        (r.piezas.length === 1 && r.productos.length === 0 ? r.piezas[0] : undefined);
-      if (pieza) {
-        onAgregarPieza(pieza);
-        setTexto('');
-        return;
-      }
+      const pieza = r.piezas.find((p) => p.codigo.toUpperCase() === codigo);
+      const lote = r.lotes.find((l) => l.producto.codigo.toUpperCase() === codigo); // ya vienen ordenados: el primero es el más antiguo
+      const unico = r.piezas.length + r.lotes.length === 1;
 
-      const producto =
-        r.productos.find((p) => p.codigo.toUpperCase() === codigo) ??
-        (r.productos.length === 1 && r.piezas.length === 0 ? r.productos[0] : undefined);
-      if (producto && producto.disponible > 0) {
-        onAgregarProducto(producto);
-        setTexto('');
-      }
+      if (pieza || (unico && r.piezas[0])) onAgregarPieza(pieza ?? r.piezas[0]);
+      else if (lote || (unico && r.lotes[0])) onAgregarLote(lote ?? r.lotes[0]);
+      else return;
+      setTexto('');
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
     }
   };
 
-  const hayResultados = resultados.data && (resultados.data.piezas.length > 0 || resultados.data.productos.length > 0);
+  const hayResultados = resultados.data && (resultados.data.piezas.length > 0 || resultados.data.lotes.length > 0);
 
   return (
     <Stack gap="xs">
@@ -77,7 +75,7 @@ export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarP
       />
 
       {busqueda.length >= 2 && resultados.data && (
-        <ScrollArea.Autosize mah={280}>
+        <ScrollArea.Autosize mah={320}>
           <Stack gap={6}>
             {!hayResultados && (
               <Text size="sm" c="dimmed">
@@ -85,6 +83,7 @@ export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarP
               </Text>
             )}
 
+            {/* Piezas únicas */}
             {resultados.data.piezas.map((p) => {
               const enCarrito = piezasEnCarrito.includes(p.piezaId);
               return (
@@ -95,31 +94,49 @@ export function Buscador({ tiendaId, piezasEnCarrito, onAgregarPieza, onAgregarP
                         {p.codigo} · {p.producto.nombre}
                       </Text>
                       <Text size="xs" c="dimmed">
-                        Pieza única · {Number(p.pesoGramos)} g
+                        Pieza única · {gramos(p.pesoGramos)}
                       </Text>
                     </div>
-                    <Button size="xs" variant="light" disabled={enCarrito} onClick={() => onAgregarPieza(p)}>
-                      {enCarrito ? 'En el carrito' : 'Agregar'}
-                    </Button>
+                    <Group gap="sm" wrap="nowrap">
+                      <Text size="sm" fw={600}>
+                        {formatoPesos(p.precioArs)}
+                      </Text>
+                      <Button size="xs" variant="light" disabled={enCarrito} onClick={() => onAgregarPieza(p)}>
+                        {enCarrito ? 'En el carrito' : 'Agregar'}
+                      </Button>
+                    </Group>
                   </Group>
                 </Paper>
               );
             })}
 
-            {resultados.data.productos.map((p) => (
-              <Paper key={p.productoId} withBorder p="xs">
+            {/* Lotes: uno por fila */}
+            {resultados.data.lotes.map((l) => (
+              <Paper key={l.loteId} withBorder p="xs">
                 <Group justify="space-between" wrap="nowrap">
                   <div>
-                    <Text size="sm" fw={500}>
-                      {p.codigo} · {p.nombre}
+                    <Group gap={6}>
+                      <Text size="sm" fw={500}>
+                        {l.producto.codigo} · {l.producto.nombre}
+                      </Text>
+                      <Badge size="xs" variant="outline">
+                        Lote {l.numeroLote}
+                      </Badge>
+                    </Group>
+                    <Text size="xs" c="dimmed">
+                      {['Ingresó ' + fecha(l.fechaIngreso), gramos(l.pesoUnitario), `${l.disponible} disponibles`]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Text>
-                    <Badge size="xs" variant="light" color={p.disponible > 0 ? 'green' : 'gray'}>
-                      {p.disponible} disponibles
-                    </Badge>
                   </div>
-                  <Button size="xs" variant="light" disabled={p.disponible === 0} onClick={() => onAgregarProducto(p)}>
-                    Agregar
-                  </Button>
+                  <Group gap="sm" wrap="nowrap">
+                    <Text size="sm" fw={600}>
+                      {formatoPesos(l.precioArs)}
+                    </Text>
+                    <Button size="xs" variant="light" onClick={() => onAgregarLote(l)}>
+                      Agregar
+                    </Button>
+                  </Group>
                 </Group>
               </Paper>
             ))}

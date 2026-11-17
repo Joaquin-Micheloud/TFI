@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { PrecioGramoService } from '../precios/precio-gramo.service.js';
 import { StockService } from '../stock/stock.service.js';
 import {
+  ProductosService,
   incluir as incluirProducto,
   type ProductoConCategoria,
 } from '../productos/productos.service.js';
@@ -87,6 +88,7 @@ export class VentasService {
     private readonly prisma: PrismaService,
     private readonly precioGramo: PrecioGramoService,
     private readonly stock: StockService,
+    private readonly productos: ProductosService,
     private readonly tickets: TicketService,
   ) {}
 
@@ -224,6 +226,8 @@ export class VentasService {
     return { buffer, nombreArchivo: `ticket-${numeroTicket(venta.puntoVenta, venta.numero)}.pdf` };
   }
   // Piezas disponibles y productos por lote con stock en la tienda, para el buscador del punto de venta
+  // Piezas disponibles y lotes con stock en la tienda, cada uno con su precio de hoy.
+  // Cada lote aparece por separado para que el vendedor elija de cuál vende.
   async buscarParaVender(dto: BuscarParaVenderDto, user: UsuarioActual) {
     await this.stock.asegurarTienda(dto.tiendaId, user);
     const texto = dto.q.trim();
@@ -238,13 +242,13 @@ export class VentasService {
           { codigoBarras: texto },
         ],
       },
-      select: { id: true, codigo: true, nombre: true, modoStock: true },
+      include: incluirProducto,
       orderBy: { nombre: 'asc' },
       take: 20,
     });
 
     const idsUnicos = productos.filter((p) => p.modoStock === ModoStock.UNICO).map((p) => p.id);
-    const productosLote = productos.filter((p) => p.modoStock === ModoStock.LOTE);
+    const idsLote = productos.filter((p) => p.modoStock === ModoStock.LOTE).map((p) => p.id);
 
     const [piezas, lotes] = await Promise.all([
       this.prisma.pieza.findMany({
@@ -254,40 +258,61 @@ export class VentasService {
           estado: EstadoPieza.DISPONIBLE,
           OR: [{ codigo: { contains: texto, mode: 'insensitive' } }, { productoId: { in: idsUnicos } }],
         },
-        select: {
-          id: true,
-          codigo: true,
-          pesoGramos: true,
-          producto: { select: { id: true, codigo: true, nombre: true } },
-        },
+        include: { producto: { include: incluirProducto } },
         orderBy: { codigo: 'asc' },
         take: 30,
       }),
-      this.prisma.lote.groupBy({
-        by: ['productoId'],
-        where: {
-          productoId: { in: productosLote.map((p) => p.id) },
-          tiendaId: dto.tiendaId,
-          cantidadDisponible: { gt: 0 },
-        },
-        _sum: { cantidadDisponible: true },
+      this.prisma.lote.findMany({
+        where: { productoId: { in: idsLote }, tiendaId: dto.tiendaId, cantidadDisponible: { gt: 0 } },
+        orderBy: { fechaIngreso: 'asc' }, // el más antiguo primero: Lote 1, Lote 2...
       }),
     ]);
 
-    return {
-      piezas: piezas.map((p) => ({
+    const { cotizar } = await this.productos.crearCotizador(user.negocioId);
+
+    const piezasConPrecio = await Promise.all(
+      piezas.map(async (p) => ({
         piezaId: p.id,
         codigo: p.codigo,
         pesoGramos: p.pesoGramos,
-        producto: p.producto,
+        producto: { id: p.producto.id, codigo: p.producto.codigo, nombre: p.producto.nombre },
+        precioArs: (await cotizar(p.producto, { pesoGramos: p.pesoGramos, hechuraUsd: p.hechuraUsd })).precioArs,
       })),
-      productos: productosLote.map((p) => ({
-        productoId: p.id,
-        codigo: p.codigo,
-        nombre: p.nombre,
-        disponible: lotes.find((l) => l.productoId === p.id)?._sum.cantidadDisponible ?? 0,
-      })),
-    };
+    );
+
+    // Numeración por producto dentro de la tienda: Lote 1 es el más antiguo
+    const numeroPorProducto = new Map<string, number>();
+    const lotesNumerados = lotes.map((l) => {
+      const numero = (numeroPorProducto.get(l.productoId) ?? 0) + 1;
+      numeroPorProducto.set(l.productoId, numero);
+      return { lote: l, numero };
+    });
+
+    const lotesConPrecio = await Promise.all(
+      lotesNumerados.map(async ({ lote, numero }) => {
+        const producto = productos.find((p) => p.id === lote.productoId)!;
+        const pesoUnitario = lote.pesoTotalGramos
+          ? lote.pesoTotalGramos.div(lote.cantidadInicial).toDecimalPlaces(3)
+          : null;
+        const precio = await cotizar(producto, { pesoGramos: pesoUnitario, hechuraUsd: lote.hechuraUsdUnitaria });
+        return {
+          loteId: lote.id,
+          numeroLote: numero,
+          fechaIngreso: lote.fechaIngreso,
+          disponible: lote.cantidadDisponible,
+          pesoUnitario,
+          precioArs: precio.precioArs,
+          producto: { id: producto.id, codigo: producto.codigo, nombre: producto.nombre },
+        };
+      }),
+    );
+
+    // Agrupados por producto y, dentro de cada uno, del más antiguo al más nuevo
+    lotesConPrecio.sort(
+      (a, b) => a.producto.nombre.localeCompare(b.producto.nombre) || a.numeroLote - b.numeroLote,
+    );
+
+    return { piezas: piezasConPrecio, lotes: lotesConPrecio };
   }
   // ---------- Preparación del carrito ----------
 

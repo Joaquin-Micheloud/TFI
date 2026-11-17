@@ -20,6 +20,7 @@ export interface ItemCarrito {
   etiqueta: string;
   detalle: string;
   maximo?: number;
+  loteId?: string;
 }
 
 export interface PagoCarrito {
@@ -34,19 +35,23 @@ export interface PiezaEncontrada {
   piezaId: string;
   codigo: string;
   pesoGramos: string;
+  precioArs: string | null;
   producto: { id: string; codigo: string; nombre: string };
 }
 
-export interface ProductoEncontrado {
-  productoId: string;
-  codigo: string;
-  nombre: string;
+export interface LoteEncontrado {
+  loteId: string;
+  numeroLote: number;
+  fechaIngreso: string;
   disponible: number;
+  pesoUnitario: string | null;
+  precioArs: string | null;
+  producto: { id: string; codigo: string; nombre: string };
 }
 
 export interface ResultadoBusqueda {
   piezas: PiezaEncontrada[];
-  productos: ProductoEncontrado[];
+  lotes: LoteEncontrado[];
 }
 
 // Respuesta de /ventas/cotizar

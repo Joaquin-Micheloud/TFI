@@ -26,6 +26,7 @@ import {
   type Producto,
   type TipoProducto,
 } from '../../lib/catalogo';
+import { StockDelProducto } from './StockDelProducto';
 
 interface ValoresProducto {
   codigo: string;
@@ -168,6 +169,7 @@ export function FormularioProducto({ producto, categorias, puedeEditar, onListo 
       <Fieldset variant="unstyled" disabled={!puedeEditar}>
         <Stack>
           {producto && <PrecioActual producto={producto} />}
+          {producto && <StockDelProducto producto={producto} />}
 
           <div>
             <Text size="sm" fw={500} mb={4}>
