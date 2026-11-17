@@ -68,6 +68,7 @@ export interface Producto {
   activo: boolean;
   categoria: { id: string; nombre: string; margenDefectoPct?: string } | null;
   precio: PrecioProducto;
+  rangoStock?: { desde: string | null; hasta: string | null; unidades: number } | null;
 }
 
 export interface ListaProductos {

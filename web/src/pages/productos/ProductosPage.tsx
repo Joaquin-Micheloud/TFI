@@ -182,15 +182,7 @@ function Catalogo({ puedeEditar }: { puedeEditar: boolean }) {
                   {p.metal && p.ley ? `${p.metal === 'ORO' ? 'Oro' : 'Plata'} ${nombreLey(p.metal, p.ley)}` : '—'}
                 </Table.Td>
                 <Table.Td ta="right">
-                  {p.precio.precioArs ? (
-                    formatoPesos(p.precio.precioArs)
-                  ) : (
-                    <Tooltip label={p.precio.motivo} multiline w={260} withArrow>
-                      <Text size="xs" c="dimmed">
-                        {p.tipo === 'REVENTA' ? 'Por pieza' : 'Sin precio'}
-                      </Text>
-                    </Tooltip>
-                  )}
+                  <PrecioCelda producto={p} />
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -239,5 +231,39 @@ function Catalogo({ puedeEditar }: { puedeEditar: boolean }) {
         categorias={categorias.data ?? []}
       />
     </Stack>
+  );
+}
+
+// Precio para la lista: único (fantasía, elaboración) o rango del stock (reventa)
+function PrecioCelda({ producto: p }: { producto: Producto }) {
+  if (p.precio.precioArs) return <>{formatoPesos(p.precio.precioArs)}</>;
+
+  const rango = p.rangoStock;
+  if (rango?.desde && rango.hasta) {
+    return (
+      <div>
+        <Text size="sm">
+          {rango.desde === rango.hasta
+            ? formatoPesos(rango.desde)
+            : `${formatoPesos(rango.desde)} a ${formatoPesos(rango.hasta)}`}
+        </Text>
+        <Text size="xs" c="dimmed">
+          {rango.unidades} en stock
+        </Text>
+      </div>
+    );
+  }
+
+  return (
+    <Tooltip
+      label={p.tipo === 'REVENTA' ? 'El precio depende de cada pieza o lote: ingresá stock para verlo' : p.precio.motivo}
+      multiline
+      w={260}
+      withArrow
+    >
+      <Text size="xs" c="dimmed">
+        {p.tipo === 'REVENTA' ? 'Sin stock' : 'Sin precio'}
+      </Text>
+    </Tooltip>
   );
 }

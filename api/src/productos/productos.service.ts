@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { PrecioGramoService } from '../precios/precio-gramo.service.js';
 import {
   ElaboracionPor,
+  EstadoPieza,
   Metal,
   ModoStock,
   Moneda,
@@ -51,6 +52,13 @@ export interface PrecioCalculado {
   motivo: string | null;
 }
 
+// Reventa: rango de precios del stock disponible (cada pieza o lote tiene su hechura)
+export interface RangoStock {
+  desde: Prisma.Decimal | null;
+  hasta: Prisma.Decimal | null;
+  unidades: number;
+}
+
 @Injectable()
 export class ProductosService {
   constructor(
@@ -87,17 +95,25 @@ export class ProductosService {
     ]);
 
     const { cotizar, cotizacion } = await this.crearCotizador(user.negocioId);
+    const rangos = await this.rangosReventa(productos, cotizar);
     const items = await Promise.all(
-      productos.map(async (p) => this.presentar(p, await cotizar(p), user)),
+      productos.map(async (p) => ({
+        ...this.presentar(p, await cotizar(p), user),
+        rangoStock: rangos.get(p.id) ?? null,
+      })),
     );
-
     return { items, total, pagina: query.pagina, porPagina: query.porPagina, cotizacion };
   }
 
   async findOne(id: string, user: UsuarioActual) {
     const producto = await this.buscar(id, user);
     const { cotizar, cotizacion } = await this.crearCotizador(user.negocioId);
-    return { ...this.presentar(producto, await cotizar(producto), user), cotizacion };
+    const rangos = await this.rangosReventa([producto], cotizar);
+    return {
+      ...this.presentar(producto, await cotizar(producto), user),
+      rangoStock: rangos.get(producto.id) ?? null,
+      cotizacion,
+    };
   }
 
   async create(dto: CreateProductoDto, user: UsuarioActual) {
@@ -181,6 +197,65 @@ export class ProductosService {
       data: { precioCompra: { multiply: factor } },
     });
     return { productosActualizados: resultado.count };
+  }
+
+    // Calcula el precio de hoy de cada pieza y lote disponible de los productos de reventa,
+  // y devuelve el más barato, el más caro y cuántas unidades hay
+  private async rangosReventa(
+    productos: ProductoConCategoria[],
+    cotizar: (
+      p: ProductoConCategoria,
+      stock?: { pesoGramos: Prisma.Decimal | null; hechuraUsd: Prisma.Decimal | null },
+    ) => Promise<PrecioCalculado>,
+  ) {
+    const rangos = new Map<string, RangoStock>();
+    const reventa = productos.filter((p) => p.tipo === TipoProducto.REVENTA);
+    if (reventa.length === 0) return rangos;
+
+    const ids = reventa.map((p) => p.id);
+    const [piezas, lotes] = await Promise.all([
+      this.prisma.pieza.findMany({
+        where: { productoId: { in: ids }, estado: EstadoPieza.DISPONIBLE },
+        select: { productoId: true, pesoGramos: true, hechuraUsd: true },
+      }),
+      this.prisma.lote.findMany({
+        where: { productoId: { in: ids }, cantidadDisponible: { gt: 0 } },
+        select: {
+          productoId: true,
+          pesoTotalGramos: true,
+          cantidadInicial: true,
+          cantidadDisponible: true,
+          hechuraUsdUnitaria: true,
+        },
+      }),
+    ]);
+
+    for (const p of reventa) {
+      const precios: Prisma.Decimal[] = [];
+      let unidades = 0;
+
+      for (const pieza of piezas.filter((x) => x.productoId === p.id)) {
+        const r = await cotizar(p, { pesoGramos: pieza.pesoGramos, hechuraUsd: pieza.hechuraUsd });
+        if (r.precioArs) precios.push(r.precioArs);
+        unidades += 1;
+      }
+
+      for (const lote of lotes.filter((x) => x.productoId === p.id)) {
+        const pesoUnitario = lote.pesoTotalGramos
+          ? lote.pesoTotalGramos.div(lote.cantidadInicial).toDecimalPlaces(3)
+          : null;
+        const r = await cotizar(p, { pesoGramos: pesoUnitario, hechuraUsd: lote.hechuraUsdUnitaria });
+        if (r.precioArs) precios.push(r.precioArs);
+        unidades += lote.cantidadDisponible;
+      }
+
+      rangos.set(p.id, {
+        desde: precios.length ? Prisma.Decimal.min(...precios) : null,
+        hasta: precios.length ? Prisma.Decimal.max(...precios) : null,
+        unidades,
+      });
+    }
+    return rangos;
   }
 
   // ---------- Internos ----------
