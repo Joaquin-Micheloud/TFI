@@ -6,6 +6,7 @@ import { InvitacionPage } from './pages/InvitacionPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProximamentePage } from './pages/ProximamentePage';
 import { RegistroPage } from './pages/RegistroPage';
+import { VenderPage } from './pages/vender/VenderPage';
 
 export default function App() {
   return (
@@ -24,7 +25,7 @@ export default function App() {
         }
       >
         <Route index element={<InicioPage />} />
-        <Route path="vender" element={<ProximamentePage titulo="Punto de venta" />} />
+        <Route path="vender" element={<VenderPage />} />
         <Route path="ventas" element={<ProximamentePage titulo="Ventas" />} />
         <Route path="productos" element={<ProximamentePage titulo="Productos" />} />
         <Route path="stock" element={<ProximamentePage titulo="Stock" />} />

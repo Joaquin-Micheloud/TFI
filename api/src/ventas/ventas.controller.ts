@@ -13,7 +13,7 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { UsuarioActual } from '../auth/types.js';
 import { VentasService } from './ventas.service.js';
 import { CotizarVentaDto, CrearVentaDto } from './dto/crear-venta.dto.js';
-import { QueryVentasDto } from './dto/query-ventas.dto.js';
+import { BuscarParaVenderDto, QueryVentasDto } from './dto/query-ventas.dto.js';
 
 // Todos los roles venden. Cada uno ve lo que le corresponde (ver filtroVisibilidad).
 @Controller('ventas')
@@ -34,6 +34,11 @@ export class VentasController {
   @Get()
   listar(@Query() query: QueryVentasDto, @CurrentUser() user: UsuarioActual) {
     return this.ventasService.listar(query, user);
+  }
+
+  @Get('buscar')
+  buscar(@Query() dto: BuscarParaVenderDto, @CurrentUser() user: UsuarioActual) {
+    return this.ventasService.buscarParaVender(dto, user);
   }
 
   @Get(':id')

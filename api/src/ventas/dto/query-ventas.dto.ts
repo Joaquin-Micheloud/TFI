@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class QueryVentasDto {
   @IsOptional()
@@ -27,4 +27,15 @@ export class QueryVentasDto {
   @Min(1)
   @Max(100)
   porPagina: number = 20;
+}
+
+// /ventas/buscar?tiendaId=...&q=anillo
+export class BuscarParaVenderDto {
+  @IsUUID('all')
+  tiendaId!: string;
+  
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  q!: string;
 }

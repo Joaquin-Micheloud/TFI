@@ -8,7 +8,6 @@ import {
   Menu,
   NavLink,
   Text,
-  Title,
   UnstyledButton,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';

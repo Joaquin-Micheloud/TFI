@@ -27,7 +27,7 @@ import {
 import type { UsuarioActual } from '../auth/types.js';
 import { TicketService, numeroTicket } from './ticket.service.js';
 import { CotizarVentaDto, CrearVentaDto, PagoDto } from './dto/crear-venta.dto.js';
-import { QueryVentasDto } from './dto/query-ventas.dto.js';
+import { BuscarParaVenderDto, QueryVentasDto } from './dto/query-ventas.dto.js';
 
 type Dec = Prisma.Decimal;
 const D = (v: number | string | Prisma.Decimal) => new Prisma.Decimal(v);
@@ -47,6 +47,7 @@ export type VentaCompleta = Prisma.VentaGetPayload<{ include: typeof incluirVent
 // Una línea del ticket ya calculada (todavía sin guardar)
 export interface LineaVenta {
   orden: number;
+  numeroItem: number; // a qué ítem del carrito pertenece (un ítem por lote puede partirse en varias líneas)
   productoId: string;
   piezaId: string | null;
   loteId: string | null;
@@ -124,7 +125,7 @@ export class VentasService {
           dolarUsado: p.dolar,
           cotizacionDolarId: p.cotizacionDolarId,
           items: {
-            create: p.lineas.map(({ detalleCosto, ...linea }) => linea),
+            create: p.lineas.map(({ detalleCosto, numeroItem, ...linea }) => linea),
           },
           pagos: { create: pagos },
         },
@@ -222,7 +223,72 @@ export class VentasService {
     const buffer = await this.tickets.generar(venta, negocio);
     return { buffer, nombreArchivo: `ticket-${numeroTicket(venta.puntoVenta, venta.numero)}.pdf` };
   }
+  // Piezas disponibles y productos por lote con stock en la tienda, para el buscador del punto de venta
+  async buscarParaVender(dto: BuscarParaVenderDto, user: UsuarioActual) {
+    await this.stock.asegurarTienda(dto.tiendaId, user);
+    const texto = dto.q.trim();
 
+    const productos = await this.prisma.producto.findMany({
+      where: {
+        negocioId: user.negocioId,
+        activo: true,
+        OR: [
+          { nombre: { contains: texto, mode: 'insensitive' } },
+          { codigo: { contains: texto, mode: 'insensitive' } },
+          { codigoBarras: texto },
+        ],
+      },
+      select: { id: true, codigo: true, nombre: true, modoStock: true },
+      orderBy: { nombre: 'asc' },
+      take: 20,
+    });
+
+    const idsUnicos = productos.filter((p) => p.modoStock === ModoStock.UNICO).map((p) => p.id);
+    const productosLote = productos.filter((p) => p.modoStock === ModoStock.LOTE);
+
+    const [piezas, lotes] = await Promise.all([
+      this.prisma.pieza.findMany({
+        where: {
+          negocioId: user.negocioId,
+          tiendaId: dto.tiendaId,
+          estado: EstadoPieza.DISPONIBLE,
+          OR: [{ codigo: { contains: texto, mode: 'insensitive' } }, { productoId: { in: idsUnicos } }],
+        },
+        select: {
+          id: true,
+          codigo: true,
+          pesoGramos: true,
+          producto: { select: { id: true, codigo: true, nombre: true } },
+        },
+        orderBy: { codigo: 'asc' },
+        take: 30,
+      }),
+      this.prisma.lote.groupBy({
+        by: ['productoId'],
+        where: {
+          productoId: { in: productosLote.map((p) => p.id) },
+          tiendaId: dto.tiendaId,
+          cantidadDisponible: { gt: 0 },
+        },
+        _sum: { cantidadDisponible: true },
+      }),
+    ]);
+
+    return {
+      piezas: piezas.map((p) => ({
+        piezaId: p.id,
+        codigo: p.codigo,
+        pesoGramos: p.pesoGramos,
+        producto: p.producto,
+      })),
+      productos: productosLote.map((p) => ({
+        productoId: p.id,
+        codigo: p.codigo,
+        nombre: p.nombre,
+        disponible: lotes.find((l) => l.productoId === p.id)?._sum.cantidadDisponible ?? 0,
+      })),
+    };
+  }
   // ---------- Preparación del carrito ----------
 
   private async preparar(dto: CotizarVentaDto, user: UsuarioActual): Promise<VentaPreparada> {
@@ -428,6 +494,7 @@ export class VentasService {
 
     return {
       orden,
+      numeroItem,
       productoId: producto.id,
       piezaId: s.piezaId,
       loteId: s.loteId,

@@ -57,3 +57,13 @@ export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> 
   if (respuesta.status === 204) return undefined as T;
   return respuesta.json() as Promise<T>;
 }
+
+// Descarga un archivo protegido (por ejemplo el PDF del ticket)
+export async function apiArchivo(ruta: string): Promise<Blob> {
+  const token = tokenStorage.get();
+  const respuesta = await fetch(`${API_URL}${ruta}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!respuesta.ok) throw new ApiError(respuesta.status, `No se pudo descargar (error ${respuesta.status})`);
+  return respuesta.blob();
+}
