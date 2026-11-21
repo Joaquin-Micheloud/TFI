@@ -12,6 +12,7 @@ import {
   TipoCotizacion,
   TipoDolar,
 } from '../generated/prisma/client.js';
+import { precioGramoPonderado } from '../productos/calculo-precio.js';
 
 const GRAMOS_POR_ONZA_TROY = new Prisma.Decimal('31.1035');
 
@@ -117,6 +118,28 @@ export class PrecioGramoService {
     };
   }
 
+  async gramoCompuesto(
+    negocioId: string,
+    componentes: { metal: Metal; ley: Prisma.Decimal; porcentaje: Prisma.Decimal }[],
+    cache = new Map<string, Promise<GramoCalculado>>(),
+  ) {
+    const detalle = await Promise.all(
+      componentes.map(async (c) => {
+        const clave = `${c.metal}-${c.ley.toString()}`;
+        if (!cache.has(clave)) cache.set(clave, this.calcular(negocioId, c.metal, c.ley.toNumber()));
+        const gramo = await cache.get(clave)!;
+        return {
+          metal: c.metal,
+          ley: c.ley,
+          porcentaje: c.porcentaje,
+          precioGramo: gramo.precioArs,
+          cotizacionMetalId: gramo.metalUsdOz?.cotizacionId ?? null,
+        };
+      }),
+    );
+    return { precioGramo: precioGramoPonderado(detalle), componentes: detalle };
+  }
+
   // Tabla del día con las leyes más comunes. Si una falla, se informa sin cortar el resto.
   async tabla(negocioId: string) {
     const filas = [];
@@ -182,3 +205,5 @@ export class PrecioGramoService {
     });
   }
 }
+
+export type GramoCalculado = Awaited<ReturnType<PrecioGramoService['calcular']>>;

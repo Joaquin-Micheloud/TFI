@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { PrecioGramoService } from '../precios/precio-gramo.service.js';
+import { PrecioGramoService, type GramoCalculado } from '../precios/precio-gramo.service.js';
 import {
   ElaboracionPor,
   EstadoPieza,
@@ -27,16 +27,22 @@ import { AjustePrecioCompraDto } from './dto/ajuste-precio-compra.dto.js';
 
 export const incluir = {
   categoria: { select: { id: true, nombre: true, margenDefectoPct: true } },
+  componentes: { orderBy: { orden: 'asc' } },
 } satisfies Prisma.ProductoInclude;
 
 export type ProductoConCategoria = Prisma.ProductoGetPayload<{ include: typeof incluir }>;
 
 type Num = Prisma.Decimal | number | null;
 
+interface ComponenteEntrada {
+  metal: Metal;
+  ley: Prisma.Decimal | number;
+  porcentaje: Prisma.Decimal | number;
+}
+
 // Campos que dependen del tipo de producto
 interface CamposTipo {
-  metal?: Metal | null;
-  ley?: Num;
+  componentes?: ComponenteEntrada[] | null;
   precioCompra?: Num;
   monedaCompra?: Moneda | null;
   elaboracionUsd?: Num;
@@ -59,6 +65,11 @@ export interface RangoStock {
   unidades: number;
 }
 
+type Cotizar = (
+  p: ProductoConCategoria,
+  stock?: { pesoGramos: Prisma.Decimal | null; hechuraUsd: Prisma.Decimal | null },
+) => Promise<PrecioCalculado>;
+
 @Injectable()
 export class ProductosService {
   constructor(
@@ -71,8 +82,9 @@ export class ProductosService {
       negocioId: user.negocioId,
       tipo: query.tipo,
       categoriaId: query.categoriaId,
-      metal: query.metal,
     };
+    // Un producto "es de oro" si alguno de sus metales es oro
+    if (query.metal) where.componentes = { some: { metal: query.metal } };
     if (query.incluirInactivos !== 'true') where.activo = true;
     if (query.buscar?.trim()) {
       const texto = query.buscar.trim();
@@ -102,6 +114,7 @@ export class ProductosService {
         rangoStock: rangos.get(p.id) ?? null,
       })),
     );
+
     return { items, total, pagina: query.pagina, porPagina: query.porPagina, cotizacion };
   }
 
@@ -119,19 +132,19 @@ export class ProductosService {
   async create(dto: CreateProductoDto, user: UsuarioActual) {
     const modoStock =
       dto.tipo === TipoProducto.FANTASIA ? ModoStock.LOTE : (dto.modoStock ?? ModoStock.UNICO);
-    const campos = this.validarPorTipo(dto.tipo, { ...dto });
+    const { componentes, ...campos } = this.validarPorTipo(dto.tipo, this.normalizarMetales(dto));
     await this.validarCategoria(dto.categoriaId, user);
 
     try {
       const producto = await this.prisma.producto.create({
         data: {
-          ...dto,
           ...campos,
           modoStock,
           codigo: this.normalizarCodigo(dto.codigo),
           codigoBarras: dto.codigoBarras?.trim() || null,
           nombre: dto.nombre.trim(),
           negocioId: user.negocioId,
+          componentes: { create: this.armarComponentes(componentes) },
         },
       });
       return this.findOne(producto.id, user);
@@ -143,12 +156,11 @@ export class ProductosService {
 
   async update(id: string, dto: UpdateProductoDto, user: UsuarioActual) {
     const actual = await this.buscar(id, user);
-    const cambios = sinIndefinidos(dto);
+    const { componentes: componentesNuevos, ...cambios } = sinIndefinidos(this.normalizarMetales(dto));
 
     // Se valida el producto como quedaría después del cambio
-    const campos = this.validarPorTipo(actual.tipo, {
-      metal: actual.metal,
-      ley: actual.ley,
+    const { componentes, ...campos } = this.validarPorTipo(actual.tipo, {
+      componentes: componentesNuevos ?? actual.componentes,
       precioCompra: actual.precioCompra,
       monedaCompra: actual.monedaCompra,
       elaboracionUsd: actual.elaboracionUsd,
@@ -167,6 +179,10 @@ export class ProductosService {
           codigo: dto.codigo ? this.normalizarCodigo(dto.codigo) : undefined,
           codigoBarras: dto.codigoBarras === undefined ? undefined : dto.codigoBarras?.trim() || null,
           nombre: dto.nombre?.trim(),
+          // Si se enviaron metales, reemplazan a los anteriores
+          componentes: componentesNuevos
+            ? { deleteMany: {}, create: this.armarComponentes(componentes) }
+            : undefined,
         },
       });
     } catch (e) {
@@ -199,15 +215,62 @@ export class ProductosService {
     return { productosActualizados: resultado.count };
   }
 
-    // Calcula el precio de hoy de cada pieza y lote disponible de los productos de reventa,
-  // y devuelve el más barato, el más caro y cuántas unidades hay
-  private async rangosReventa(
-    productos: ProductoConCategoria[],
-    cotizar: (
-      p: ProductoConCategoria,
-      stock?: { pesoGramos: Prisma.Decimal | null; hechuraUsd: Prisma.Decimal | null },
-    ) => Promise<PrecioCalculado>,
-  ) {
+  /**
+   * Devuelve una función que calcula el precio de un producto (opcionalmente
+   * con el peso y la hechura de una pieza o lote).
+   */
+  async crearCotizador(negocioId: string) {
+    const ctx = await this.precioGramo.contextoNegocio(negocioId);
+    const cache = new Map<string, Promise<GramoCalculado>>(); // un cálculo por metal y ley
+
+    // Precio del gramo de la pieza: promedio ponderado de sus metales
+    const gramoDe = async (p: ProductoConCategoria) => {
+      if (p.componentes.length === 0) return null;
+      try {
+        return (await this.precioGramo.gramoCompuesto(negocioId, p.componentes, cache)).precioGramo;
+      } catch {
+        return null; // ej.: un metal en modo manual sin precio cargado
+      }
+    };
+
+    const cotizar: Cotizar = async (p, stock) => {
+      const margenPct = p.margenPct ?? p.categoria?.margenDefectoPct ?? null;
+      const gramo = await gramoDe(p);
+
+      const costo = calcularCosto(
+        { ...p, hechuraUsd: null, ...stock },
+        { precioGramo: gramo, dolar: ctx.dolar.valorVenta },
+      );
+      if (!costo.ok) {
+        return { precioArs: null, costoArs: null, margenPct, detalle: null, motivo: costo.motivo };
+      }
+      if (margenPct === null) {
+        return {
+          precioArs: null,
+          costoArs: costo.costo,
+          margenPct,
+          detalle: costo.detalle,
+          motivo: 'Sin margen: definilo en el producto o en su categoría',
+        };
+      }
+
+      const { precio } = calcularPrecio(costo.costo, margenPct, ctx.reglaRedondeo);
+      return { precioArs: precio, costoArs: costo.costo, margenPct, detalle: costo.detalle, motivo: null };
+    };
+
+    const cotizacion = {
+      tipoDolar: ctx.tipoDolar,
+      dolar: ctx.dolar.valorVenta,
+      fechaHora: ctx.dolar.fechaHora,
+    };
+
+    return { cotizar, cotizacion };
+  }
+
+  // ---------- Internos ----------
+
+  // Precio de hoy de cada pieza y lote disponible de los productos de reventa
+  private async rangosReventa(productos: ProductoConCategoria[], cotizar: Cotizar) {
     const rangos = new Map<string, RangoStock>();
     const reventa = productos.filter((p) => p.tipo === TipoProducto.REVENTA);
     if (reventa.length === 0) return rangos;
@@ -258,8 +321,6 @@ export class ProductosService {
     return rangos;
   }
 
-  // ---------- Internos ----------
-
   private async buscar(id: string, user: UsuarioActual) {
     const producto = await this.prisma.producto.findFirst({
       where: { id, negocioId: user.negocioId },
@@ -269,6 +330,15 @@ export class ProductosService {
     return producto;
   }
 
+  // "metal" y "ley" sueltos (carga simple) equivalen a un solo metal al 100 %
+  private normalizarMetales<T extends { metal?: Metal; ley?: number; componentes?: ComponenteEntrada[] }>(dto: T) {
+    const { metal, ley, ...resto } = dto;
+    if (!resto.componentes && metal && ley != null) {
+      return { ...resto, componentes: [{ metal, ley, porcentaje: 100 }] };
+    }
+    return resto;
+  }
+
   // Exige los campos de cada tipo y limpia los que no corresponden
   private validarPorTipo<T extends CamposTipo>(tipo: TipoProducto, datos: T): T {
     const errores: string[] = [];
@@ -276,16 +346,9 @@ export class ProductosService {
     if (tipo === TipoProducto.FANTASIA) {
       if (datos.precioCompra == null) errores.push('precioCompra es obligatorio para fantasía');
       if (!datos.monedaCompra) errores.push('monedaCompra es obligatoria para fantasía (ARS o USD)');
-      Object.assign(datos, {
-        metal: null,
-        ley: null,
-        elaboracionUsd: null,
-        elaboracionPor: null,
-        insumosArs: null,
-      });
+      Object.assign(datos, { componentes: [], elaboracionUsd: null, elaboracionPor: null, insumosArs: null });
     } else {
-      if (!datos.metal) errores.push('metal es obligatorio para reventa y elaboración propia');
-      if (datos.ley == null) errores.push('ley es obligatoria para reventa y elaboración propia');
+      errores.push(...this.validarComponentes(datos.componentes ?? []));
       Object.assign(datos, { precioCompra: null, monedaCompra: null });
 
       if (tipo === TipoProducto.ELABORACION) {
@@ -301,6 +364,29 @@ export class ProductosService {
     return datos;
   }
 
+  // Uno o varios metales, sin repetir metal y ley, que sumen 100 %
+  private validarComponentes(componentes: ComponenteEntrada[]) {
+    if (componentes.length === 0) return ['Indicá el metal y la ley'];
+
+    const errores: string[] = [];
+    const suma = componentes.reduce((s, c) => s.plus(c.porcentaje), new Prisma.Decimal(0));
+    if (!suma.equals(100)) {
+      errores.push(`Los porcentajes de los metales tienen que sumar 100 % (suman ${suma.toString()} %)`);
+    }
+    const claves = componentes.map((c) => `${c.metal}-${new Prisma.Decimal(c.ley).toString()}`);
+    if (new Set(claves).size !== claves.length) errores.push('Hay un metal con la misma ley repetido');
+    return errores;
+  }
+
+  private armarComponentes(componentes: ComponenteEntrada[] | null | undefined) {
+    return (componentes ?? []).map((c, i) => ({
+      metal: c.metal,
+      ley: c.ley,
+      porcentaje: c.porcentaje,
+      orden: i,
+    }));
+  }
+
   private async validarCategoria(categoriaId: string | null | undefined, user: UsuarioActual) {
     if (!categoriaId) return;
     const categoria = await this.prisma.categoria.findFirst({
@@ -312,66 +398,6 @@ export class ProductosService {
 
   private normalizarCodigo(codigo: string) {
     return codigo.trim().toUpperCase();
-  }
-
-  /**
-   * Devuelve una función que calcula el precio de un producto.
-   * Guarda en caché el precio del gramo por metal y ley, para no repetir consultas en un listado.
-   */
-    async crearCotizador(negocioId: string) {
-    const ctx = await this.precioGramo.contextoNegocio(negocioId);
-    const gramos = new Map<string, Promise<Prisma.Decimal | null>>();
-
-    const precioGramo = (metal: Metal, ley: Prisma.Decimal) => {
-      const clave = `${metal}-${ley.toString()}`;
-      if (!gramos.has(clave)) {
-        gramos.set(
-          clave,
-          this.precioGramo.calcular(negocioId, metal, ley.toNumber()).then(
-            (r) => r.precioArs,
-            () => null,
-          ),
-        );
-      }
-      return gramos.get(clave)!;
-    };
-
-    // "stock" trae el peso real y la hechura de una pieza o lote (Paso 8)
-    const cotizar = async (
-      p: ProductoConCategoria,
-      stock?: { pesoGramos: Prisma.Decimal | null; hechuraUsd: Prisma.Decimal | null },
-    ): Promise<PrecioCalculado> => {
-      const margenPct = p.margenPct ?? p.categoria?.margenDefectoPct ?? null;
-      const gramo = p.metal && p.ley ? await precioGramo(p.metal, p.ley) : null;
-
-      const costo = calcularCosto(
-        { ...p, hechuraUsd: null, ...stock },
-        { precioGramo: gramo, dolar: ctx.dolar.valorVenta },
-      );
-      if (!costo.ok) {
-        return { precioArs: null, costoArs: null, margenPct, detalle: null, motivo: costo.motivo };
-      }
-      if (margenPct === null) {
-        return {
-          precioArs: null,
-          costoArs: costo.costo,
-          margenPct,
-          detalle: costo.detalle,
-          motivo: 'Sin margen: definilo en el producto o en su categoría',
-        };
-      }
-
-      const { precio } = calcularPrecio(costo.costo, margenPct, ctx.reglaRedondeo);
-      return { precioArs: precio, costoArs: costo.costo, margenPct, detalle: costo.detalle, motivo: null };
-    };
-
-    const cotizacion = {
-      tipoDolar: ctx.tipoDolar,
-      dolar: ctx.dolar.valorVenta,
-      fechaHora: ctx.dolar.fechaHora,
-    };
-
-    return { cotizar, cotizacion };
   }
 
   // El vendedor ve el precio de venta, pero no costos ni márgenes

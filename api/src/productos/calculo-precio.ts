@@ -88,3 +88,9 @@ export function calcularPrecio(costo: Dec, margenPct: Dec, redondeo: number) {
 export function calcularHechuraUsd(precioCompra: Dec, peso: Dec, gramoAlta: Dec, dolarAlta: Dec) {
   return r2(precioCompra.minus(peso.times(gramoAlta)).div(dolarAlta));
 }
+
+export function precioGramoPonderado(componentes: { porcentaje: Dec; precioGramo: Dec }[]) {
+  return r2(
+    componentes.reduce((suma, c) => suma.plus(c.precioGramo.times(c.porcentaje).div(100)), new Prisma.Decimal(0)),
+  );
+}

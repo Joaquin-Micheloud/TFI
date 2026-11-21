@@ -302,9 +302,7 @@ model Producto {
   tipo         TipoProducto
   modoStock    ModoStock    @map("modo_stock")
 
-  // Tipos REVENTA y ELABORACION
-  metal      Metal?
-  ley        Decimal? @db.Decimal(4, 3)
+  // Tipos REVENTA y ELABORACION (los metales están en ProductoComponente)
   pesoGramos Decimal? @map("peso_gramos") @db.Decimal(10, 3) // peso de referencia
 
   // Margen propio (null = usa el de la categoría)
@@ -325,18 +323,33 @@ model Producto {
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  negocio   Negocio    @relation(fields: [negocioId], references: [id], onDelete: Cascade)
-  categoria Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  negocio     Negocio              @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  categoria   Categoria?           @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
   piezas      Pieza[]
   lotes       Lote[]
   movimientos MovimientoStock[]
   ventaItems  VentaItem[]
+  componentes ProductoComponente[]
 
   @@unique([negocioId, codigo])
   @@unique([negocioId, codigoBarras])
   @@index([negocioId, tipo])
   @@index([categoriaId])
   @@map("productos")
+}
+
+model ProductoComponente {
+  id         String  @id @default(uuid()) @db.Uuid
+  productoId String  @map("producto_id") @db.Uuid
+  metal      Metal
+  ley        Decimal @db.Decimal(4, 3)
+  porcentaje Decimal @db.Decimal(5, 2)
+  orden      Int     @default(0)
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([productoId])
+  @@map("producto_componentes")
 }
 
 // ---------- Stock ----------
@@ -506,6 +519,7 @@ model VentaItem {
   pesoGramos          Decimal? @map("peso_gramos") @db.Decimal(10, 3)
   gramoUsado          Decimal? @map("gramo_usado") @db.Decimal(14, 2)
   cotizacionMetalId   String?  @map("cotizacion_metal_id") @db.Uuid
+  componentes         Json?
 
   venta    Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
   producto Producto @relation(fields: [productoId], references: [id])

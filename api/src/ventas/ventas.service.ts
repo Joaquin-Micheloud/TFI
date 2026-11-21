@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { PrecioGramoService } from '../precios/precio-gramo.service.js';
+import { PrecioGramoService, type GramoCalculado } from '../precios/precio-gramo.service.js';
 import { StockService } from '../stock/stock.service.js';
 import {
   ProductosService,
@@ -33,7 +33,6 @@ import { BuscarParaVenderDto, QueryVentasDto } from './dto/query-ventas.dto.js';
 type Dec = Prisma.Decimal;
 const D = (v: number | string | Prisma.Decimal) => new Prisma.Decimal(v);
 
-type GramoCalculado = Awaited<ReturnType<PrecioGramoService['calcular']>>;
 type ContextoNegocio = Awaited<ReturnType<PrecioGramoService['contextoNegocio']>>;
 
 const incluirVenta = {
@@ -65,11 +64,12 @@ export interface LineaVenta {
   subtotal: Dec;
   costoUnitario: Dec;
   margenPct: Dec;
-  metal: Metal | null;
+  metal: Metal | null; // solo si la pieza tiene un único metal
   ley: Dec | null;
   pesoGramos: Dec | null;
-  gramoUsado: Dec | null;
+  gramoUsado: Dec | null; // con varios metales, el gramo promedio ponderado
   cotizacionMetalId: string | null;
+  componentes: Prisma.InputJsonValue | undefined; // snapshot de la composición
   detalleCosto: Record<string, Dec>;
 }
 
@@ -122,6 +122,7 @@ export class VentasService {
           negocioId: user.negocioId,
           tiendaId: p.tiendaId,
           usuarioId: user.usuarioId,
+          clienteId: p.clienteId,
           puntoVenta: tienda.puntoVenta,
           numero: tienda.ultimoNumeroVenta,
           subtotal: p.subtotal,
@@ -235,7 +236,7 @@ export class VentasService {
     const buffer = await this.tickets.generar(venta, negocio);
     return { buffer, nombreArchivo: `ticket-${numeroTicket(venta.puntoVenta, venta.numero)}.pdf` };
   }
-  // Piezas disponibles y productos por lote con stock en la tienda, para el buscador del punto de venta
+
   // Piezas disponibles y lotes con stock en la tienda, cada uno con su precio de hoy.
   // Cada lote aparece por separado para que el vendedor elija de cuál vende.
   async buscarParaVender(dto: BuscarParaVenderDto, user: UsuarioActual) {
@@ -324,6 +325,7 @@ export class VentasService {
 
     return { piezas: piezasConPrecio, lotes: lotesConPrecio };
   }
+
   // ---------- Preparación del carrito ----------
 
   private async preparar(dto: CotizarVentaDto, user: UsuarioActual): Promise<VentaPreparada> {
@@ -337,7 +339,7 @@ export class VentasService {
     }
     const ctx = await this.precioGramo.contextoNegocio(user.negocioId);
 
-    const gramos = new Map<string, Promise<GramoCalculado>>();
+    const gramos = new Map<string, Promise<GramoCalculado>>(); // un cálculo por metal y ley
     const piezasUsadas = new Set<string>();
     const usadoPorLote = new Map<string, number>(); // por si el mismo producto aparece dos veces
     const lineas: LineaVenta[] = [];
@@ -504,20 +506,16 @@ export class VentasService {
     gramos: Map<string, Promise<GramoCalculado>>,
     user: UsuarioActual,
   ): Promise<LineaVenta> {
-    // Precio del gramo (una sola consulta por metal y ley)
-    let gramo: GramoCalculado | null = null;
-    if (producto.metal && producto.ley) {
-      const clave = `${producto.metal}-${producto.ley.toString()}`;
-      if (!gramos.has(clave)) {
-        gramos.set(clave, this.precioGramo.calcular(user.negocioId, producto.metal, producto.ley.toNumber()));
-      }
-      gramo = await gramos.get(clave)!;
-    }
+    // Precio del gramo de la pieza: promedio ponderado de sus metales
+    const compuesto =
+      producto.componentes.length > 0
+        ? await this.precioGramo.gramoCompuesto(user.negocioId, producto.componentes, gramos)
+        : null;
 
     const pesoGramos = s.pesoGramos ?? producto.pesoGramos;
     const costo = calcularCosto(
       { ...producto, pesoGramos, hechuraUsd: s.hechuraUsd },
-      { precioGramo: gramo?.precioArs ?? null, dolar: ctx.dolar.valorVenta },
+      { precioGramo: compuesto?.precioGramo ?? null, dolar: ctx.dolar.valorVenta },
     );
     if (!costo.ok) {
       throw new BadRequestException(`Ítem ${numeroItem} (${producto.codigo}): ${costo.motivo}`);
@@ -535,6 +533,9 @@ export class VentasService {
       .times(D(1).minus(descuento.div(100)))
       .toDecimalPlaces(2);
 
+    // Con un solo metal se completan también los campos simples del snapshot
+    const unico = compuesto?.componentes.length === 1 ? compuesto.componentes[0] : null;
+
     return {
       orden,
       numeroItem,
@@ -549,11 +550,20 @@ export class VentasService {
       subtotal,
       costoUnitario: costo.costo,
       margenPct,
-      metal: producto.metal,
-      ley: producto.ley,
+      metal: unico?.metal ?? null,
+      ley: unico?.ley ?? null,
       pesoGramos,
-      gramoUsado: gramo?.precioArs ?? null,
-      cotizacionMetalId: gramo?.metalUsdOz?.cotizacionId ?? null,
+      gramoUsado: compuesto?.precioGramo ?? null,
+      cotizacionMetalId: unico?.cotizacionMetalId ?? null,
+      componentes: compuesto
+        ? compuesto.componentes.map((c) => ({
+            metal: c.metal,
+            ley: c.ley.toString(),
+            porcentaje: c.porcentaje.toString(),
+            precioGramo: c.precioGramo.toString(),
+            cotizacionMetalId: c.cotizacionMetalId,
+          }))
+        : undefined,
       detalleCosto: costo.detalle,
     };
   }
@@ -608,7 +618,6 @@ export class VentasService {
     return venta;
   }
 
-  // El vendedor no ve costos ni márgenes
   // Agrega cuánto se devolvió de cada ítem. El vendedor no ve costos ni márgenes.
   private presentarVenta(v: VentaCompleta, user: UsuarioActual) {
     const devuelto = new Map<string, number>();

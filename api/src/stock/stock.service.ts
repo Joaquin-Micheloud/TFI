@@ -476,13 +476,13 @@ export class StockService {
   }
 
   // Cotización del momento del alta: dólar del negocio y precio del gramo del metal y la ley
+  // (si tiene varios metales, el promedio ponderado)
   private async cotizacionAlta(producto: ProductoConCategoria, user: UsuarioActual) {
     const { dolar } = await this.precioGramo.contextoNegocio(user.negocioId);
-    let gramo: Prisma.Decimal | null = null;
-    if (producto.metal && producto.ley) {
-      const r = await this.precioGramo.calcular(user.negocioId, producto.metal, producto.ley.toNumber());
-      gramo = r.precioArs;
-    }
+    const gramo =
+      producto.componentes.length > 0
+        ? (await this.precioGramo.gramoCompuesto(user.negocioId, producto.componentes)).precioGramo
+        : null;
     return { dolar: dolar.valorVenta, gramo };
   }
 
@@ -519,7 +519,13 @@ export class StockService {
   }
 
   private resumenProducto(p: ProductoConCategoria) {
-    return { id: p.id, codigo: p.codigo, nombre: p.nombre, tipo: p.tipo, metal: p.metal, ley: p.ley };
+    return {
+      id: p.id,
+      codigo: p.codigo,
+      nombre: p.nombre,
+      tipo: p.tipo,
+      componentes: p.componentes.map((c) => ({ metal: c.metal, ley: c.ley, porcentaje: c.porcentaje })),
+    };
   }
 
   private presentar<T extends { precio: PrecioCalculado }>(item: T, user: UsuarioActual) {
