@@ -55,8 +55,7 @@ export interface Producto {
   descripcion: string | null;
   tipo: TipoProducto;
   modoStock: ModoStock;
-  metal: Metal | null;
-  ley: string | null;
+  componentes: { metal: Metal; ley: string; porcentaje: string }[];
   pesoGramos: string | null;
   margenPct?: string | null;
   precioCompra?: string | null;
