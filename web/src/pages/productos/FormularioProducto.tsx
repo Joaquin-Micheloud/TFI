@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Alert,
   Button,
   Card,
@@ -15,6 +16,7 @@ import {
 import { isNotEmpty, useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import { formatoPesos } from '../../lib/formato';
 import {
@@ -28,6 +30,14 @@ import {
 } from '../../lib/catalogo';
 import { StockDelProducto } from './StockDelProducto';
 
+// Metal adicional de una pieza combinada
+interface MetalExtra {
+  clave: string;
+  metal: Metal;
+  ley: string | null;
+  porcentaje: number | string;
+}
+
 interface ValoresProducto {
   codigo: string;
   codigoBarras: string;
@@ -36,8 +46,10 @@ interface ValoresProducto {
   tipo: TipoProducto;
   modoStock: ModoStock;
   categoriaId: string | null;
-  metal: Metal;
+  metal: Metal; // metal principal (o único)
   ley: string | null;
+  porcentajePrincipal: number | string; // solo se usa si hay metales extra
+  extras: MetalExtra[];
   pesoGramos: number | string;
   margenPct: number | string;
   precioCompra: number | string;
@@ -51,8 +63,13 @@ interface ValoresProducto {
 // Los Decimal llegan como texto; en el formulario un campo vacío es ''
 const aNumero = (v: string | null | undefined) => (v == null ? '' : Number(v));
 const aNumeroONull = (v: number | string) => (v === '' ? null : Number(v));
+const sumaPorcentajes = (v: ValoresProducto) =>
+  Math.round(
+    (Number(v.porcentajePrincipal) + v.extras.reduce((s, x) => s + (Number(x.porcentaje) || 0), 0)) * 100,
+  ) / 100;
 
 function valoresIniciales(p: Producto | null): ValoresProducto {
+  const [principal, ...resto] = p?.componentes ?? [];
   return {
     codigo: p?.codigo ?? '',
     codigoBarras: p?.codigoBarras ?? '',
@@ -61,8 +78,15 @@ function valoresIniciales(p: Producto | null): ValoresProducto {
     tipo: p?.tipo ?? 'REVENTA',
     modoStock: p?.modoStock ?? 'UNICO',
     categoriaId: p?.categoria?.id ?? null,
-    metal: p?.metal ?? 'ORO',
-    ley: p?.ley != null ? String(Number(p.ley)) : null,
+    metal: principal?.metal ?? 'ORO',
+    ley: principal ? String(Number(principal.ley)) : null,
+    porcentajePrincipal: principal ? Number(principal.porcentaje) : 100,
+    extras: resto.map((c) => ({
+      clave: crypto.randomUUID(),
+      metal: c.metal,
+      ley: String(Number(c.ley)),
+      porcentaje: Number(c.porcentaje),
+    })),
     pesoGramos: aNumero(p?.pesoGramos),
     margenPct: aNumero(p?.margenPct),
     precioCompra: aNumero(p?.precioCompra),
@@ -94,8 +118,17 @@ function armarBody(v: ValoresProducto, esNuevo: boolean) {
     body.precioCompra = aNumeroONull(v.precioCompra);
     body.monedaCompra = v.monedaCompra;
   } else {
-    body.metal = v.metal;
-    body.ley = v.ley ? Number(v.ley) : null;
+    if (v.extras.length === 0) {
+      // Un solo metal: igual que siempre
+      body.metal = v.metal;
+      body.ley = v.ley ? Number(v.ley) : null;
+    } else {
+      // Pieza combinada: todos los metales con su porcentaje del peso
+      body.componentes = [
+        { metal: v.metal, ley: Number(v.ley), porcentaje: Number(v.porcentajePrincipal) },
+        ...v.extras.map((x) => ({ metal: x.metal, ley: Number(x.ley), porcentaje: Number(x.porcentaje) })),
+      ];
+    }
     body.pesoGramos = aNumeroONull(v.pesoGramos);
   }
   if (v.tipo === 'ELABORACION') {
@@ -123,6 +156,12 @@ export function FormularioProducto({ producto, categorias, puedeEditar, onListo 
       codigo: isNotEmpty('El código es obligatorio'),
       nombre: isNotEmpty('El nombre es obligatorio'),
       ley: (v, val) => (val.tipo !== 'FANTASIA' && !v ? 'Elegí la ley' : null),
+      extras: (extras, val) => {
+        if (val.tipo === 'FANTASIA' || extras.length === 0) return null;
+        if (extras.some((x) => !x.ley)) return 'Elegí la ley de cada metal';
+        const suma = sumaPorcentajes(val);
+        return suma !== 100 ? `Los porcentajes tienen que sumar 100 % (suman ${suma} %)` : null;
+      },
       pesoGramos: (v, val) => (val.tipo === 'ELABORACION' && v === '' ? 'El peso es obligatorio' : null),
       precioCompra: (v, val) => (val.tipo === 'FANTASIA' && v === '' ? 'El precio de compra es obligatorio' : null),
       elaboracionUsd: (v, val) =>
@@ -160,9 +199,26 @@ export function FormularioProducto({ producto, categorias, puedeEditar, onListo 
     },
   });
 
-  const { tipo, metal } = form.values;
+  const { tipo, metal, extras } = form.values;
   const modoStock: ModoStock = tipo === 'FANTASIA' ? 'LOTE' : form.values.modoStock;
   const categoria = categorias.find((c) => c.id === form.values.categoriaId);
+  const suma = sumaPorcentajes(form.values);
+
+  const agregarMetal = () => {
+    const primero = extras.length === 0;
+    if (primero) form.setFieldValue('porcentajePrincipal', 50);
+    form.insertListItem('extras', {
+      clave: crypto.randomUUID(),
+      metal: metal === 'ORO' ? 'PLATA' : 'ORO',
+      ley: null,
+      porcentaje: primero ? 50 : Math.max(0, 100 - suma),
+    });
+  };
+
+  const quitarMetal = (i: number) => {
+    form.removeListItem('extras', i);
+    if (extras.length === 1) form.setFieldValue('porcentajePrincipal', 100); // vuelve a ser un solo metal
+  };
 
   return (
     <form onSubmit={form.onSubmit((valores) => guardar.mutate(valores))}>
@@ -242,30 +298,113 @@ export function FormularioProducto({ producto, categorias, puedeEditar, onListo 
           </Group>
 
           {tipo !== 'FANTASIA' && (
-            <Group grow align="flex-start">
-              <Select
-                label="Metal"
-                data={[
-                  { value: 'ORO', label: 'Oro' },
-                  { value: 'PLATA', label: 'Plata' },
-                ]}
-                value={metal}
-                onChange={(v) => {
-                  form.setFieldValue('metal', (v ?? 'ORO') as Metal);
-                  form.setFieldValue('ley', null); // cada metal tiene sus leyes
-                }}
-                allowDeselect={false}
-              />
-              <Select label="Ley" data={LEYES[metal]} {...form.getInputProps('ley')} />
-              <NumberInput
-                label={tipo === 'REVENTA' ? 'Peso de referencia (g)' : 'Peso (g)'}
-                description={tipo === 'REVENTA' ? 'Cada pieza guarda su peso real' : undefined}
-                min={0}
-                decimalScale={3}
-                decimalSeparator=","
-                {...form.getInputProps('pesoGramos')}
-              />
-            </Group>
+            <Stack gap={6}>
+              {/* Metal, ley y peso: igual que siempre */}
+              <Group grow align="flex-start">
+                <Select
+                  label="Metal"
+                  data={[
+                    { value: 'ORO', label: 'Oro' },
+                    { value: 'PLATA', label: 'Plata' },
+                  ]}
+                  value={metal}
+                  onChange={(v) => {
+                    form.setFieldValue('metal', (v ?? 'ORO') as Metal);
+                    form.setFieldValue('ley', null); // cada metal tiene sus leyes
+                  }}
+                  allowDeselect={false}
+                />
+                <Select label="Ley" data={LEYES[metal]} {...form.getInputProps('ley')} />
+                <NumberInput
+                  label={tipo === 'REVENTA' ? 'Peso de referencia (g)' : 'Peso (g)'}
+                  description={tipo === 'REVENTA' ? 'Cada pieza guarda su peso real' : undefined}
+                  min={0}
+                  decimalScale={3}
+                  decimalSeparator=","
+                  {...form.getInputProps('pesoGramos')}
+                />
+              </Group>
+
+              {/* Opcional: pieza combinada con otros metales */}
+              {extras.length > 0 && (
+                <Card withBorder p="xs">
+                  <Stack gap={6}>
+                    <Text size="xs" c="dimmed">
+                      Pieza combinada: porcentaje del peso de cada metal
+                    </Text>
+                    <Group gap="xs" wrap="nowrap">
+                      <Text size="sm" style={{ flex: 1 }}>
+                        {metal === 'ORO' ? 'Oro' : 'Plata'} (metal de arriba)
+                      </Text>
+                      <NumberInput
+                        w={100}
+                        suffix=" %"
+                        min={1}
+                        max={100}
+                        decimalScale={2}
+                        {...form.getInputProps('porcentajePrincipal')}
+                      />
+                      <span style={{ width: 28 }} />
+                    </Group>
+                    {extras.map((x, i) => (
+                      <Group key={x.clave} gap="xs" wrap="nowrap">
+                        <Select
+                          w={100}
+                          data={[
+                            { value: 'ORO', label: 'Oro' },
+                            { value: 'PLATA', label: 'Plata' },
+                          ]}
+                          value={x.metal}
+                          onChange={(v) => {
+                            form.setFieldValue(`extras.${i}.metal`, (v ?? 'ORO') as Metal);
+                            form.setFieldValue(`extras.${i}.ley`, null);
+                          }}
+                          allowDeselect={false}
+                        />
+                        <Select
+                          placeholder="Ley"
+                          style={{ flex: 1 }}
+                          data={LEYES[x.metal]}
+                          value={x.ley}
+                          onChange={(v) => form.setFieldValue(`extras.${i}.ley`, v)}
+                        />
+                        <NumberInput
+                          w={100}
+                          suffix=" %"
+                          min={1}
+                          max={100}
+                          decimalScale={2}
+                          value={x.porcentaje}
+                          onChange={(v) => form.setFieldValue(`extras.${i}.porcentaje`, v)}
+                        />
+                        <ActionIcon variant="subtle" color="red" onClick={() => quitarMetal(i)} aria-label="Quitar metal">
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Group>
+                    ))}
+                    <Text size="xs" c={suma === 100 ? 'dimmed' : 'red'} ta="right">
+                      Suma: {suma} % del peso
+                    </Text>
+                  </Stack>
+                </Card>
+              )}
+              {form.errors.extras && (
+                <Text size="xs" c="red">
+                  {form.errors.extras}
+                </Text>
+              )}
+              <Group>
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  leftSection={<IconPlus size={14} />}
+                  disabled={extras.length >= 4}
+                  onClick={agregarMetal}
+                >
+                  {extras.length === 0 ? 'Agregar otro metal (pieza combinada)' : 'Agregar otro metal'}
+                </Button>
+              </Group>
+            </Stack>
           )}
 
           {tipo === 'FANTASIA' && (
