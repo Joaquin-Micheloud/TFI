@@ -17,9 +17,9 @@ import {
 import type { UsuarioActual } from '../auth/types.js';
 import { CrearTransferenciaDto, QueryTransferenciasDto } from './dto/transferencia.dto.js';
 
-const usuarioResumen = { select: { nombre: true, email: true } } as const;
+export const usuarioResumen = { select: { nombre: true, email: true } } as const;
 
-const incluirTransferencia = {
+export const incluirTransferencia = {
   origen: { select: { id: true, nombre: true } },
   destino: { select: { id: true, nombre: true } },
   enviadaPor: usuarioResumen,

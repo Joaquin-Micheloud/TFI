@@ -52,9 +52,9 @@ const TRANSICIONES: Record<EstadoCompostura, EstadoCompostura[]> = {
   CANCELADA: [],
 };
 
-const usuarioResumen = { select: { nombre: true, email: true } } as const;
+export const usuarioResumen = { select: { nombre: true, email: true } } as const;
 
-const incluirCompostura = {
+export const incluirCompostura = {
   tienda: { select: { id: true, nombre: true, direccion: true, localidad: true } },
   cliente: { select: { id: true, nombre: true, telefono: true, dni: true } },
   usuario: usuarioResumen,
@@ -64,12 +64,12 @@ const incluirCompostura = {
 
 export type ComposturaCompleta = Prisma.ComposturaGetPayload<{ include: typeof incluirCompostura }>;
 
-const incluirResumen = {
+export const incluirResumen = {
   tienda: { select: { id: true, nombre: true } },
   cliente: { select: { id: true, nombre: true, telefono: true } },
 } satisfies Prisma.ComposturaInclude;
 
-type ComposturaResumen = Prisma.ComposturaGetPayload<{ include: typeof incluirResumen }>;
+export type ComposturaResumen = Prisma.ComposturaGetPayload<{ include: typeof incluirResumen }>;
 
 interface DatosPrecio {
   metal?: Metal | null;

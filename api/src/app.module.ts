@@ -22,6 +22,7 @@ import { VentasModule } from './ventas/ventas.module.js';
 import { ClientesModule } from './clientes/clientes.module.js';
 import { TransferenciasModule } from './transferencias/transferencias.module.js';
 import { ComposturasModule } from './composturas/composturas.module.js';
+import { ReportesModule } from './reportes/reportes.module.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { ComposturasModule } from './composturas/composturas.module.js';
     ClientesModule,
     TransferenciasModule,
     ComposturasModule,
+    ReportesModule,
   ],
   controllers: [AppController],
   providers: [
