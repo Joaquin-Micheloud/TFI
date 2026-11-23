@@ -62,8 +62,7 @@ interface ProductoStock {
   codigo: string;
   nombre: string;
   tipo: TipoProducto;
-  metal: Metal | null;
-  ley: string | null;
+  componentes: { metal: Metal; ley: string; porcentaje: string }[];
 }
 
 // Al vendedor la API no le manda precioCompra, hechura, dolarAlta ni gramoAlta

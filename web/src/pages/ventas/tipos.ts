@@ -15,6 +15,7 @@ export interface ItemVenta {
   ley: string | null;
   pesoGramos: string | null;
   gramoUsado: string | null;
+  componentes: { metal: 'ORO' | 'PLATA'; ley: string; porcentaje: string; precioGramo: string }[] | null;
 }
 
 export interface DevolucionVenta {

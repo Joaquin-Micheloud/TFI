@@ -1,6 +1,7 @@
 export type TipoProducto = 'REVENTA' | 'FANTASIA' | 'ELABORACION';
 export type ModoStock = 'UNICO' | 'LOTE';
 export type Metal = 'ORO' | 'PLATA';
+import { nombreLey } from './formato';
 
 export const NOMBRE_TIPO: Record<TipoProducto, string> = {
   REVENTA: 'Reventa',
@@ -82,4 +83,12 @@ export interface Categoria {
   nombre: string;
   margenDefectoPct?: string;
   _count: { productos: number };
+}
+
+// "Oro 18k" o "Plata 925 80 % + Oro 18k 20 %"
+export function describirMetales(componentes: { metal: Metal; ley: string | number; porcentaje: string | number }[]) {
+  const nombre = (c: (typeof componentes)[number]) => `${c.metal === 'ORO' ? 'Oro' : 'Plata'} ${nombreLey(c.metal, c.ley)}`;
+  if (componentes.length === 0) return '—';
+  if (componentes.length === 1) return nombre(componentes[0]);
+  return componentes.map((c) => `${nombre(c)} ${Number(c.porcentaje)} %`).join(' + ');
 }

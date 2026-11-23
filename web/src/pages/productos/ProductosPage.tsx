@@ -21,8 +21,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { IconAdjustmentsDollar, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 import { api } from '../../lib/api';
-import { formatoPesos, nombreLey } from '../../lib/formato';
-import { COLOR_TIPO, NOMBRE_TIPO, type Categoria, type ListaProductos, type Producto } from '../../lib/catalogo';
+import { formatoPesos } from '../../lib/formato';
+import { COLOR_TIPO, NOMBRE_TIPO, describirMetales, type Categoria, type ListaProductos, type Producto } from '../../lib/catalogo';
 import { AjusteFantasiaModal } from './AjusteFantasiaModal';
 import { CategoriasPanel } from './CategoriasPanel';
 import { FormularioProducto } from './FormularioProducto';
@@ -179,7 +179,7 @@ function Catalogo({ puedeEditar }: { puedeEditar: boolean }) {
                   </Badge>
                 </Table.Td>
                 <Table.Td>
-                  {p.metal && p.ley ? `${p.metal === 'ORO' ? 'Oro' : 'Plata'} ${nombreLey(p.metal, p.ley)}` : '—'}
+                  {describirMetales(p.componentes)}
                 </Table.Td>
                 <Table.Td ta="right">
                   <PrecioCelda producto={p} />

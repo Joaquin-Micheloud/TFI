@@ -116,8 +116,16 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
                   <Text size="xs" c="dimmed">
                     {[
                       i.pesoGramos ? `${Number(i.pesoGramos).toLocaleString('es-AR')} g` : null,
-                      i.metal && i.ley ? `${i.metal === 'ORO' ? 'oro' : 'plata'} ${nombreLey(i.metal, i.ley)}` : null,
-                      i.gramoUsado ? `gramo a ${formatoPesos(i.gramoUsado)}` : null,
+                      i.componentes && i.componentes.length > 1
+                        ? i.componentes
+                            .map((c) => `${c.metal === 'ORO' ? 'oro' : 'plata'} ${nombreLey(c.metal, c.ley)} ${Number(c.porcentaje)} %`)
+                            .join(' + ')
+                        : i.metal && i.ley
+                          ? `${i.metal === 'ORO' ? 'oro' : 'plata'} ${nombreLey(i.metal, i.ley)}`
+                          : null,
+                      i.gramoUsado
+                        ? `gramo ${i.componentes && i.componentes.length > 1 ? 'promedio ' : ''}a ${formatoPesos(i.gramoUsado)}`
+                        : null,
                       Number(i.descuentoPct) > 0 ? `-${Number(i.descuentoPct)} %` : null,
                     ]
                       .filter(Boolean)
