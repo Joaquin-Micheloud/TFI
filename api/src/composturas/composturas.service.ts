@@ -315,7 +315,7 @@ export class ComposturasService {
       throw new BadRequestException('Indicá el motivo de la cancelación');
     }
 
-    const datos: Prisma.ComposturaUpdateManyMutationInput = { estado: dto.estado };
+    const datos: Prisma.ComposturaUncheckedUpdateManyInput = { estado: dto.estado };
     if (dto.estado === EstadoCompostura.LISTA) datos.listaEn = new Date();
     if (dto.estado === EstadoCompostura.CANCELADA) datos.motivoCancelacion = nota;
 
@@ -466,7 +466,7 @@ export class ComposturasService {
     tx: Prisma.TransactionClient,
     id: string,
     estadoActual: EstadoCompostura,
-    datos: Prisma.ComposturaUpdateManyMutationInput,
+    datos: Prisma.ComposturaUncheckedUpdateManyInput,
   ) {
     const r = await tx.compostura.updateMany({ where: { id, estado: estadoActual }, data: datos });
     if (r.count === 0) throw new ConflictException('La compostura cambió de estado, volvé a intentar');
