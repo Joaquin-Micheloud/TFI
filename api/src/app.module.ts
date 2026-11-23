@@ -20,6 +20,7 @@ import { MailModule } from './mail/mail.module.js';
 import { InvitacionesModule } from './invitaciones/invitaciones.module.js';
 import { VentasModule } from './ventas/ventas.module.js';
 import { ClientesModule } from './clientes/clientes.module.js';
+import { TransferenciasModule } from './transferencias/transferencias.module.js';
 
 @Module({
   imports: [
@@ -35,18 +36,17 @@ import { ClientesModule } from './clientes/clientes.module.js';
     PreciosModule,
     CategoriasModule,
     ProductosModule,
-    ProductosModule,
     StockModule,
     InvitacionesModule,
     VentasModule,
+    ClientesModule,
+    TransferenciasModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
-    VentasModule,
-    ClientesModule,
   ],
 })
 export class AppModule {}

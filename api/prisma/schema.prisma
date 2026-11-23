@@ -121,6 +121,12 @@ enum DestinoDevolucion {
   STOCK // vuelve a estar disponible
   BAJA  // vino dañado: se da de baja
 }
+
+enum EstadoTransferencia {
+  ENVIADA
+  RECIBIDA
+  CANCELADA
+}
 // ---------- Organización ----------
 
 model Negocio {
@@ -147,6 +153,7 @@ model Negocio {
   ventas       Venta[]
   devoluciones Devolucion[]
   clientes     Cliente[]
+  transferencias Transferencia[]
 
   @@map("negocios")
 }
@@ -169,6 +176,9 @@ model Usuario {
   ventas               Venta[]      @relation("VentasRealizadas")
   ventasAnuladas       Venta[]      @relation("VentasAnuladas")
   devoluciones         Devolucion[]
+  transferenciasEnviadas   Transferencia[] @relation("TransferenciaEnviadaPor")
+  transferenciasRecibidas  Transferencia[] @relation("TransferenciaRecibidaPor")
+  transferenciasCanceladas Transferencia[] @relation("TransferenciaCanceladaPor")
 
 
   @@map("usuarios")
@@ -211,6 +221,8 @@ model Tienda {
   lotes            Lote[]
   movimientosStock MovimientoStock[]
   ventas           Venta[]
+  transferenciasSalida  Transferencia[] @relation("TransferenciaOrigen")
+  transferenciasEntrada Transferencia[] @relation("TransferenciaDestino")
 
   @@unique([negocioId, nombre])
   @@index([negocioId])
@@ -330,6 +342,7 @@ model Producto {
   movimientos MovimientoStock[]
   ventaItems  VentaItem[]
   componentes ProductoComponente[]
+  transferenciaItems TransferenciaItem[]
 
   @@unique([negocioId, codigo])
   @@unique([negocioId, codigoBarras])
@@ -374,6 +387,7 @@ model Pieza {
   tienda      Tienda            @relation(fields: [tiendaId], references: [id])
   movimientos MovimientoStock[]
   ventaItems  VentaItem[]
+  transferenciaItems TransferenciaItem[]
 
   @@unique([negocioId, codigo])
   @@index([productoId, estado])
@@ -401,6 +415,8 @@ model Lote {
   tienda      Tienda            @relation(fields: [tiendaId], references: [id])
   movimientos MovimientoStock[]
   ventaItems  VentaItem[]
+  transferenciasSalida  TransferenciaItem[] @relation("LoteOrigenTransferencia")
+  transferenciasEntrada TransferenciaItem[] @relation("LoteDestinoTransferencia")
 
   @@index([productoId, tiendaId, fechaIngreso])
   @@map("lotes")
@@ -604,4 +620,53 @@ model Cliente {
   @@unique([negocioId, dni])
   @@index([negocioId, nombre])
   @@map("clientes")
+}
+
+// ---------- Transferencias entre tiendas ----------
+
+model Transferencia {
+  id             String              @id @default(uuid()) @db.Uuid
+  negocioId      String              @map("negocio_id") @db.Uuid
+  origenId       String              @map("origen_id") @db.Uuid
+  destinoId      String              @map("destino_id") @db.Uuid
+  estado         EstadoTransferencia @default(ENVIADA)
+  nota           String?
+  enviadaPorId   String              @map("enviada_por_id") @db.Uuid
+  enviadaEn      DateTime            @default(now()) @map("enviada_en")
+  recibidaPorId  String?             @map("recibida_por_id") @db.Uuid
+  recibidaEn     DateTime?           @map("recibida_en")
+  canceladaPorId String?             @map("cancelada_por_id") @db.Uuid
+  canceladaEn    DateTime?           @map("cancelada_en")
+
+  negocio      Negocio             @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  origen       Tienda              @relation("TransferenciaOrigen", fields: [origenId], references: [id])
+  destino      Tienda              @relation("TransferenciaDestino", fields: [destinoId], references: [id])
+  enviadaPor   Usuario             @relation("TransferenciaEnviadaPor", fields: [enviadaPorId], references: [id])
+  recibidaPor  Usuario?            @relation("TransferenciaRecibidaPor", fields: [recibidaPorId], references: [id])
+  canceladaPor Usuario?            @relation("TransferenciaCanceladaPor", fields: [canceladaPorId], references: [id])
+  items        TransferenciaItem[]
+
+  @@index([negocioId, estado])
+  @@index([origenId])
+  @@index([destinoId])
+  @@map("transferencias")
+}
+
+model TransferenciaItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  transferenciaId String  @map("transferencia_id") @db.Uuid
+  productoId      String  @map("producto_id") @db.Uuid
+  piezaId         String? @map("pieza_id") @db.Uuid
+  loteOrigenId    String? @map("lote_origen_id") @db.Uuid
+  loteDestinoId   String? @map("lote_destino_id") @db.Uuid // se completa al recibir
+  cantidad        Int
+
+  transferencia Transferencia @relation(fields: [transferenciaId], references: [id], onDelete: Cascade)
+  producto      Producto      @relation(fields: [productoId], references: [id])
+  pieza         Pieza?        @relation(fields: [piezaId], references: [id])
+  loteOrigen    Lote?         @relation("LoteOrigenTransferencia", fields: [loteOrigenId], references: [id])
+  loteDestino   Lote?         @relation("LoteDestinoTransferencia", fields: [loteDestinoId], references: [id])
+
+  @@index([transferenciaId])
+  @@map("transferencia_items")
 }

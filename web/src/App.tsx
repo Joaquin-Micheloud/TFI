@@ -14,6 +14,7 @@ import { TiendasPage } from './pages/tiendas/TiendasPage';
 import { VenderPage } from './pages/vender/VenderPage';
 import { VentasPage } from './pages/ventas/VentasPage';
 import { ClientesPage } from './pages/clientes/ClientesPage';
+import { TransferenciasPage } from './pages/transferencias/TransferenciasPage';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="clientes" element={<ClientesPage />} />
         <Route path="productos" element={<ProductosPage />} />
         <Route path="stock" element={<StockPage />} />
+        <Route path="transferencias" element={<TransferenciasPage />} />
         <Route
           path="precios"
           element={
