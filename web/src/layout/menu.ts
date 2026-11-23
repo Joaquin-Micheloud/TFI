@@ -9,6 +9,7 @@ import {
   IconPackage,
   IconReceipt,
   IconSettings,
+  IconTool,
   IconUsers,
   type Icon,
 } from '@tabler/icons-react';
@@ -27,6 +28,7 @@ export const MENU: ItemMenu[] = [
   { etiqueta: 'Vender', ruta: '/vender', icono: IconCashRegister },
   { etiqueta: 'Ventas', ruta: '/ventas', icono: IconReceipt },
   { etiqueta: 'Clientes', ruta: '/clientes', icono: IconAddressBook },
+  { etiqueta: 'Composturas', ruta: '/composturas', icono: IconTool },
   { etiqueta: 'Productos', ruta: '/productos', icono: IconDiamond },
   { etiqueta: 'Stock', ruta: '/stock', icono: IconPackage },
   { etiqueta: 'Transferencias', ruta: '/transferencias', icono: IconArrowsExchange },

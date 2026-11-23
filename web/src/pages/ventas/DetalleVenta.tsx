@@ -37,6 +37,7 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
   const v = venta.data!;
 
   const anulada = v.estado === 'ANULADA';
+  const esServicio = v.tipo === 'SERVICIO'; // cobro de una compostura: no se anula ni se devuelve
   const quedaPorDevolver = v.items.some((i) => i.cantidad > i.cantidadDevuelta);
   const nombre = (u: { nombre: string | null; email: string }) => u.nombre ?? u.email;
 
@@ -77,12 +78,12 @@ export function DetalleVenta({ ventaId }: { ventaId: string }) {
         <Button variant="light" leftSection={<IconPrinter size={16} />} onClick={() => abrirTicket(v.id)}>
           Reimprimir ticket
         </Button>
-        {puedeGestionar && !anulada && quedaPorDevolver && (
+        {puedeGestionar && !esServicio && !anulada && quedaPorDevolver && (
           <Button variant="light" color="grape" leftSection={<IconArrowBackUp size={16} />} onClick={() => setAccion('devolver')}>
             Devolución
           </Button>
         )}
-        {puedeGestionar && !anulada && v.devoluciones.length === 0 && (
+        {puedeGestionar && !esServicio && !anulada && v.devoluciones.length === 0 && (
           <Button variant="light" color="red" leftSection={<IconBan size={16} />} onClick={() => setAccion('anular')}>
             Anular
           </Button>

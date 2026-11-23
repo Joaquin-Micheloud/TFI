@@ -13,6 +13,7 @@ interface VentaResumen {
   fecha: string;
   total: string;
   estado: 'CONFIRMADA' | 'ANULADA';
+  tipo: 'PRODUCTOS' | 'SERVICIO';
   tienda: { nombre: string };
   usuario: { nombre: string | null };
   cliente: { nombre: string } | null;
@@ -111,6 +112,11 @@ export function VentasPage() {
                   {formatoPesos(v.total)}
                 </Table.Td>
                 <Table.Td>
+                  {v.tipo === 'SERVICIO' && (
+                    <Badge color="blue" size="xs" variant="light">
+                      Compostura
+                    </Badge>
+                  )}
                   {v.estado === 'ANULADA' && (
                     <Badge color="red" size="xs">
                       Anulada

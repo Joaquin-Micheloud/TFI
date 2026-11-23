@@ -11,5 +11,6 @@ import { DevolucionesService } from './devoluciones.service.js';
   imports: [PreciosModule, ProductosModule, StockModule],
   controllers: [VentasController],
   providers: [VentasService, TicketService, DevolucionesService],
+  exports: [VentasService], // la entrega de composturas cobra igual que una venta
 })
 export class VentasModule {}

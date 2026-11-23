@@ -127,6 +127,20 @@ enum EstadoTransferencia {
   RECIBIDA
   CANCELADA
 }
+
+enum EstadoCompostura {
+  RECIBIDA      // la pieza entró al local
+  PRESUPUESTADA // esperando que el cliente acepte el presupuesto
+  EN_TALLER
+  LISTA
+  ENTREGADA
+  CANCELADA
+}
+
+enum TipoVenta {
+  PRODUCTOS
+  SERVICIO // entrega de una compostura
+}
 // ---------- Organización ----------
 
 model Negocio {
@@ -137,6 +151,7 @@ model Negocio {
   plan                   String?
   respuestasCuestionario Json?     @map("respuestas_cuestionario")
   reglaRedondeo          Int       @default(100) @map("regla_redondeo")
+  ultimoNumeroCompostura Int       @default(0) @map("ultimo_numero_compostura")
   creadoEn               DateTime  @default(now()) @map("creado_en")
   actualizadoEn          DateTime  @updatedAt @map("actualizado_en")
 
@@ -154,6 +169,7 @@ model Negocio {
   devoluciones Devolucion[]
   clientes     Cliente[]
   transferencias Transferencia[]
+  composturas    Compostura[]
 
   @@map("negocios")
 }
@@ -179,6 +195,8 @@ model Usuario {
   transferenciasEnviadas   Transferencia[] @relation("TransferenciaEnviadaPor")
   transferenciasRecibidas  Transferencia[] @relation("TransferenciaRecibidaPor")
   transferenciasCanceladas Transferencia[] @relation("TransferenciaCanceladaPor")
+  composturasRecibidas     Compostura[]       @relation("ComposturasRecibidas")
+  cambiosCompostura        ComposturaEstado[]
 
 
   @@map("usuarios")
@@ -223,6 +241,7 @@ model Tienda {
   ventas           Venta[]
   transferenciasSalida  Transferencia[] @relation("TransferenciaOrigen")
   transferenciasEntrada Transferencia[] @relation("TransferenciaDestino")
+  composturas           Compostura[]
 
   @@unique([negocioId, nombre])
   @@index([negocioId])
@@ -497,6 +516,7 @@ model Venta {
   anuladaEn         DateTime?   @map("anulada_en")
   anuladaPorId      String?     @map("anulada_por_id") @db.Uuid
   clienteId         String?     @map("cliente_id") @db.Uuid
+  tipo              TipoVenta   @default(PRODUCTOS)
 
   negocio      Negocio      @relation(fields: [negocioId], references: [id], onDelete: Cascade)
   tienda       Tienda       @relation(fields: [tiendaId], references: [id])
@@ -506,6 +526,7 @@ model Venta {
   items        VentaItem[]
   pagos        Pago[]
   devoluciones Devolucion[]
+  compostura   Compostura?
 
   @@unique([tiendaId, numero])
   @@index([negocioId, fecha])
@@ -518,7 +539,7 @@ model VentaItem {
   id                  String   @id @default(uuid()) @db.Uuid
   ventaId             String   @map("venta_id") @db.Uuid
   orden               Int
-  productoId          String   @map("producto_id") @db.Uuid
+  productoId          String?  @map("producto_id") @db.Uuid // null en el servicio de una compostura
   piezaId             String?  @map("pieza_id") @db.Uuid
   loteId              String?  @map("lote_id") @db.Uuid
   codigo              String
@@ -537,10 +558,10 @@ model VentaItem {
   cotizacionMetalId   String?  @map("cotizacion_metal_id") @db.Uuid
   componentes         Json?
 
-  venta    Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
-  producto Producto @relation(fields: [productoId], references: [id])
-  pieza    Pieza?   @relation(fields: [piezaId], references: [id])
-  lote     Lote?    @relation(fields: [loteId], references: [id])
+  venta    Venta     @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  producto Producto? @relation(fields: [productoId], references: [id])
+  pieza    Pieza?    @relation(fields: [piezaId], references: [id])
+  lote     Lote?     @relation(fields: [loteId], references: [id])
   devolucionItems DevolucionItem[]
 
   @@index([ventaId])
@@ -614,8 +635,9 @@ model Cliente {
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
-  ventas  Venta[]
+  negocio     Negocio      @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  ventas      Venta[]
+  composturas Compostura[]
 
   @@unique([negocioId, dni])
   @@index([negocioId, nombre])
@@ -669,4 +691,66 @@ model TransferenciaItem {
 
   @@index([transferenciaId])
   @@map("transferencia_items")
+}
+
+// ---------- Composturas ----------
+
+model Compostura {
+  id                String           @id @default(uuid()) @db.Uuid
+  negocioId         String           @map("negocio_id") @db.Uuid
+  tiendaId          String           @map("tienda_id") @db.Uuid
+  clienteId         String           @map("cliente_id") @db.Uuid
+  usuarioId         String           @map("usuario_id") @db.Uuid // quién la recibió
+  numero            Int // correlativo por negocio: orden 000123
+  estado            EstadoCompostura @default(RECIBIDA)
+  descripcion       String
+  metal             Metal?
+  ley               Decimal?         @db.Decimal(4, 3)
+  pesoEntrada       Decimal          @map("peso_entrada") @db.Decimal(10, 3)
+  pesoAportado      Decimal          @default(0) @map("peso_aportado") @db.Decimal(10, 3) // material que trae el cliente
+  pesoAgregado      Decimal?         @map("peso_agregado") @db.Decimal(10, 3) // metal que pone la joyería
+  pesoSalida        Decimal?         @map("peso_salida") @db.Decimal(10, 3)
+  manoObra          Decimal?         @map("mano_obra") @db.Decimal(14, 2)
+  margenPct         Decimal?         @map("margen_pct") @db.Decimal(6, 2) // sobre el material agregado
+  presupuesto       Decimal?         @db.Decimal(14, 2)
+  precioFinal       Decimal?         @map("precio_final") @db.Decimal(14, 2)
+  sena              Decimal          @default(0) @db.Decimal(14, 2)
+  medioSena         MedioPago?       @map("medio_sena")
+  fechaEstimada     DateTime?        @map("fecha_estimada") @db.Date
+  observaciones     String?
+  motivoCancelacion String?          @map("motivo_cancelacion")
+  listaEn           DateTime?        @map("lista_en")
+  entregadaEn       DateTime?        @map("entregada_en")
+  ventaId           String?          @unique @map("venta_id") @db.Uuid
+  creadoEn          DateTime         @default(now()) @map("creado_en")
+  actualizadoEn     DateTime         @updatedAt @map("actualizado_en")
+
+  negocio   Negocio            @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  tienda    Tienda             @relation(fields: [tiendaId], references: [id])
+  cliente   Cliente            @relation(fields: [clienteId], references: [id])
+  usuario   Usuario            @relation("ComposturasRecibidas", fields: [usuarioId], references: [id])
+  venta     Venta?             @relation(fields: [ventaId], references: [id])
+  historial ComposturaEstado[]
+
+  @@unique([negocioId, numero])
+  @@index([negocioId, estado])
+  @@index([clienteId])
+  @@index([tiendaId])
+  @@map("composturas")
+}
+
+// Historial de estados: quién cambió qué y cuándo
+model ComposturaEstado {
+  id           String           @id @default(uuid()) @db.Uuid
+  composturaId String           @map("compostura_id") @db.Uuid
+  estado       EstadoCompostura
+  usuarioId    String           @map("usuario_id") @db.Uuid
+  nota         String?
+  fecha        DateTime         @default(now())
+
+  compostura Compostura @relation(fields: [composturaId], references: [id], onDelete: Cascade)
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id])
+
+  @@index([composturaId])
+  @@map("compostura_estados")
 }

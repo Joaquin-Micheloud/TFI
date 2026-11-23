@@ -33,6 +33,7 @@ export interface VentaDetalle {
   numeroFormateado: string;
   fecha: string;
   estado: 'CONFIRMADA' | 'ANULADA';
+  tipo: 'PRODUCTOS' | 'SERVICIO'; // SERVICIO = cobro de una compostura
   subtotal: string;
   descuentoPct: string;
   descuentoTotal: string;

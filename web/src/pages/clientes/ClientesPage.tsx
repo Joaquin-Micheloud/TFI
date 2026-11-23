@@ -20,6 +20,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { IconPlus, IconSearch } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { Cliente, FichaCliente } from '../../lib/clientes';
+import {
+  COLOR_ESTADO_COMPOSTURA,
+  NOMBRE_ESTADO_COMPOSTURA,
+  type ComposturaResumen,
+} from '../../lib/composturas';
 import { formatoFechaHora, formatoPesos } from '../../lib/formato';
 import { FormularioCliente } from './FormularioCliente';
 
@@ -132,6 +137,10 @@ function Ficha({ clienteId }: { clienteId: string }) {
     queryKey: ['ventas', `clienteId=${clienteId}`],
     queryFn: () => api<{ items: CompraResumen[] }>(`/ventas?clienteId=${clienteId}&porPagina=50`),
   });
+  const composturas = useQuery({
+    queryKey: ['composturas', `clienteId=${clienteId}`],
+    queryFn: () => api<{ items: ComposturaResumen[] }>(`/composturas?clienteId=${clienteId}&porPagina=50`),
+  });
 
   if (ficha.isLoading || !ficha.data) return <Loader />;
   const c = ficha.data;
@@ -194,6 +203,41 @@ function Ficha({ clienteId }: { clienteId: string }) {
                 <Table.Td>
                   <Text size="sm" c="dimmed" ta="center" py="sm">
                     Todavía no compró nada.
+                  </Text>
+                </Table.Td>
+              </Table.Tr>
+            )}
+          </Table.Tbody>
+        </Table>
+      </Card>
+
+      <Text fw={600} size="sm">
+        Composturas
+      </Text>
+      <Card withBorder p={0}>
+        <Table fz="sm">
+          <Table.Tbody>
+            {composturas.data?.items.map((cp) => (
+              <Table.Tr key={cp.id}>
+                <Table.Td ff="monospace">#{cp.numeroFormateado}</Table.Td>
+                <Table.Td>{formatoFechaHora(cp.creadoEn)}</Table.Td>
+                <Table.Td>
+                  <Text size="sm" lineClamp={1}>
+                    {cp.descripcion}
+                  </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Badge size="xs" variant="light" color={COLOR_ESTADO_COMPOSTURA[cp.estado]}>
+                    {NOMBRE_ESTADO_COMPOSTURA[cp.estado]}
+                  </Badge>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+            {composturas.data?.items.length === 0 && (
+              <Table.Tr>
+                <Table.Td>
+                  <Text size="sm" c="dimmed" ta="center" py="sm">
+                    No dejó piezas para arreglar.
                   </Text>
                 </Table.Td>
               </Table.Tr>

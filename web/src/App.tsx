@@ -15,6 +15,7 @@ import { VenderPage } from './pages/vender/VenderPage';
 import { VentasPage } from './pages/ventas/VentasPage';
 import { ClientesPage } from './pages/clientes/ClientesPage';
 import { TransferenciasPage } from './pages/transferencias/TransferenciasPage';
+import { ComposturasPage } from './pages/composturas/ComposturasPage';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="vender" element={<VenderPage />} />
         <Route path="ventas" element={<VentasPage />} />
         <Route path="clientes" element={<ClientesPage />} />
+        <Route path="composturas" element={<ComposturasPage />} />
         <Route path="productos" element={<ProductosPage />} />
         <Route path="stock" element={<StockPage />} />
         <Route path="transferencias" element={<TransferenciasPage />} />

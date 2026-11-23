@@ -1,7 +1,9 @@
-import { Alert, Card, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { Link } from 'react-router';
+import { Alert, Button, Card, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../lib/api';
+import type { AlertasComposturas } from '../lib/composturas';
 import { formatoFechaHora, formatoPesos, formatoUsd, nombreLey } from '../lib/formato';
 
 interface FilaPrecio {
@@ -46,7 +48,14 @@ export function InicioPage() {
     refetchInterval: 5 * 60_000, // se actualiza sola cada 5 minutos
   });
 
+  const alertas = useQuery({
+    queryKey: ['composturas', 'alertas', null],
+    queryFn: () => api<AlertasComposturas>('/composturas/alertas'),
+  });
+
   const hayDesactualizadas = cotizaciones.data?.some((c) => c.desactualizada);
+  const vencidas = alertas.data?.vencidas.length ?? 0;
+  const sinRetirar = alertas.data?.sinRetirar.length ?? 0;
 
   return (
     <Stack>
@@ -59,6 +68,20 @@ export function InicioPage() {
         <Alert color="orange" title="Cotizaciones desactualizadas">
           Hace más de 24 horas que no se pudo leer alguna cotización. Los precios se están calculando con el último
           valor guardado.
+        </Alert>
+      )}
+
+      {(vencidas > 0 || sinRetirar > 0) && (
+        <Alert color="orange" title="Composturas para atender">
+          <Group justify="space-between">
+            <Text size="sm">
+              {vencidas > 0 && `${vencidas} vencidas. `}
+              {sinRetirar > 0 && `${sinRetirar} listas hace más de ${alertas.data?.diasSinRetirar} días sin retirar.`}
+            </Text>
+            <Button component={Link} to="/composturas" size="xs" variant="light" color="orange">
+              Ver composturas
+            </Button>
+          </Group>
         </Alert>
       )}
 

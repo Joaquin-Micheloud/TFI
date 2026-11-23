@@ -203,6 +203,7 @@ export class VentasService {
           fecha: true,
           total: true,
           estado: true,
+          tipo: true,
           tienda: { select: { nombre: true } },
           usuario: { select: { nombre: true } },
           cliente: { select: { nombre: true } },
@@ -568,8 +569,9 @@ export class VentasService {
     };
   }
 
-  // Convierte cada pago a pesos y controla que cubran el total
-  private calcularPagos(pagos: PagoDto[], total: Dec, dolar: Dec) {
+  // Convierte cada pago a pesos y controla que cubran el total.
+  // Pública: la usa también la entrega de composturas.
+  calcularPagos(pagos: PagoDto[], total: Dec, dolar: Dec) {
     const lista = pagos.map((p) => {
       const enDolares = p.medio === MedioPago.EFECTIVO_USD;
       const monto = D(p.monto);

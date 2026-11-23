@@ -21,6 +21,7 @@ import { InvitacionesModule } from './invitaciones/invitaciones.module.js';
 import { VentasModule } from './ventas/ventas.module.js';
 import { ClientesModule } from './clientes/clientes.module.js';
 import { TransferenciasModule } from './transferencias/transferencias.module.js';
+import { ComposturasModule } from './composturas/composturas.module.js';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { TransferenciasModule } from './transferencias/transferencias.module.js'
     VentasModule,
     ClientesModule,
     TransferenciasModule,
+    ComposturasModule,
   ],
   controllers: [AppController],
   providers: [

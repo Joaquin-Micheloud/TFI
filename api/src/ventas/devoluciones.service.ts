@@ -8,6 +8,7 @@ import {
   MotivoBaja,
   Prisma,
   TipoMovimiento,
+  TipoVenta,
 } from '../generated/prisma/client.js';
 import type { UsuarioActual } from '../auth/types.js';
 import { AnularVentaDto, DevolucionDto } from './dto/devolucion.dto.js';
@@ -27,6 +28,7 @@ export class DevolucionesService {
   // Anula la venta completa: devuelve todo el stock y la marca ANULADA (nunca se borra)
   async anular(id: string, dto: AnularVentaDto, user: UsuarioActual) {
     const venta = await this.buscarVenta(id, user);
+    this.rechazarServicio(venta);
     if (venta.estado === EstadoVenta.ANULADA) throw new ConflictException('La venta ya está anulada');
     if (venta.devoluciones.length > 0) {
       throw new ConflictException(
@@ -57,6 +59,7 @@ export class DevolucionesService {
   // Devuelve algunos ítems o unidades de una venta
   async devolver(id: string, dto: DevolucionDto, user: UsuarioActual) {
     const venta = await this.buscarVenta(id, user);
+    this.rechazarServicio(venta);
     if (venta.estado === EstadoVenta.ANULADA) {
       throw new ConflictException('No se puede registrar una devolución sobre una venta anulada');
     }
@@ -120,6 +123,13 @@ export class DevolucionesService {
 
   // ---------- Internos ----------
 
+  // La entrega de una compostura no mueve stock: no se anula ni se devuelve desde acá
+  private rechazarServicio(venta: VentaConItems) {
+    if (venta.tipo === TipoVenta.SERVICIO) {
+      throw new ConflictException('Es el cobro de una compostura: no se puede anular ni devolver como una venta');
+    }
+  }
+
   private async buscarVenta(id: string, user: UsuarioActual) {
     const venta = await this.prisma.venta.findFirst({
       where: { id, negocioId: user.negocioId },
@@ -140,6 +150,7 @@ export class DevolucionesService {
     detalle: string,
     user: UsuarioActual,
   ) {
+    if (!item.productoId) return; // ítem de servicio: no hay stock que reponer
     if (item.piezaId) {
       await tx.pieza.update({
         where: { id: item.piezaId },
